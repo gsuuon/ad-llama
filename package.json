@@ -3,16 +3,24 @@
   "type": "module",
   "version": "0.0.1",
   "description": "Ad-lib using LLaMa and template strings",
-  "main": "index.js",
-  "scripts": {},
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -w -c dev.config.mjs"
+  },
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "@mlc-ai/web-tokenizers": "^0.1.0",
-    "tvmjs": "file:3rdparty/relax/web/lib/index.js"
-  },
   "devDependencies": {
+    "@mlc-ai/web-tokenizers": "^0.1.0",
+    "@rollup/plugin-commonjs": "^25.0.3",
+    "@rollup/plugin-node-resolve": "^15.1.0",
     "@types/node": "^20.4.5",
-    "@webgpu/types": "^0.1.34"
+    "@webgpu/types": "^0.1.34",
+    "rollup": "^3.26.3",
+    "rollup-plugin-ignore": "^1.0.10",
+    "rollup-plugin-serve": "^2.0.2",
+    "rollup-plugin-typescript2": "^0.35.0",
+    "tvmjs": "file:./3rdparty/relax/web/"
   }
 }
