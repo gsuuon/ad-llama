@@ -3,14 +3,17 @@ import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 type ModelSpec = {
   modelWeightsConfigUrl: string // url of root of repo containing ndarray-cache.json and mlc-chat-config.json
+    // TODO ensure this ends in '/' or else the last section gets replaced by new URL()
   modelLibWasmUrl: string // url of the compiled wasm for model
 }
 
 const scope = (name?: string) => 'ad-llama' + name ? '/' + name : ''
+const cacheScope = (name: string) => new tvmjs.ArtifactCache(scope(name))
 
+/// FIXME This only works for Llama-2 models because of the wasm name
 const guessModelSpecFromPrebuiltId = (id: string) => ({
-    modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main`,
-    modelLibWasmUrl: `https://github.com/mlc-ai/binary-mlc-llm-libs/blob/main/${id}-webgpu.wasm`
+    modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
+    modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 
 const initialize = async () => {
@@ -21,7 +24,9 @@ const initialize = async () => {
 
   return {
     loadModel: async (spec: ModelSpec): Promise<LoadedModel> => {
-      const configResponse = await fetch(new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl))
+      const configResponse = await cacheScope('config').fetchWithCache(
+        new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
+      )
 
       if (!configResponse.ok) {
         throw Error('Invalid model config url. Check that <url>/mlc-chat-config.json exists and is reachable.')
@@ -32,7 +37,7 @@ const initialize = async () => {
       const wasm = await (
         spec.modelLibWasmUrl.includes('localhost')
           ? fetch(spec.modelLibWasmUrl)
-          : new tvmjs.ArtifactCache(scope('wasm')).fetchWithCache(spec.modelLibWasmUrl)
+          : cacheScope('wasm').fetchWithCache(spec.modelLibWasmUrl)
       )
 
       const tvm = await tvmjs.instantiate(
@@ -42,15 +47,13 @@ const initialize = async () => {
 
       tvm.initWebGPU(gpu.device) // TODO Do I need to initWebGPU before fetchNDArrayCache? I'd prefer to defer this until later
 
-      tvm.registerInitProgressCallback( report => {
-        console.log('Model fetch progress: ', report.progress)
-      })
+      tvm.registerInitProgressCallback(report => console.log(report.text))
 
       console.log('Model weights download started')
 
       const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, tvm.webgpu(), scope('model'))
 
-      const config = configResponse.json() as any
+      const config = await configResponse.json()
       const configTokenizerFiles = Object.entries({
         'tokenizer.model': Tokenizer.fromSentencePiece,
         'tokenizer.json': Tokenizer.fromJSON
@@ -63,7 +66,7 @@ const initialize = async () => {
       const [path, create] = configTokenizerFiles
 
       const tokenizerResult =
-        await new tvmjs.ArtifactCache(scope('model'))
+        await cacheScope('model')
           .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
       const tokenizer = create(await tokenizerResult.arrayBuffer())
@@ -170,13 +173,15 @@ const ad = (model: LoadedModel) => {
   })
 }
 
-const api = await initialize()
-const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
-const generator = ad(loadedModel)
-const { template, a } = generator('You are a dungeon master. Generate a character based on the Dungeons and Dragons universe.')
+export const test = async () => {
+  const api = await initialize()
+  const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+  const generator = ad(loadedModel)
+  const { template, a } = generator('You are a dungeon master. Generate a character based on the Dungeons and Dragons universe.')
 
-const result = template`{
-  "name": "${a('name')}",
-}`
+  const result = template`{
+    "name": "${a('name')}",
+  }`
 
-console.log(await result.collect())
+  console.log(await result.collect())
+}
