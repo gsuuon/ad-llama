@@ -24,6 +24,9 @@ const initialize = async () => {
 
   return {
     loadModel: async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice): Promise<LoadedModel> => {
+      console.log('Loading model')
+      console.log(spec)
+
       const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
       const configResponse = await cacheScope('config').fetchWithCache(configUrl)
         // TODO ArtifactCache error is probably too cryptic if configurl is invalid
@@ -74,12 +77,22 @@ const initialize = async () => {
 
       const [path, create] = configTokenizerFiles
 
+      console.log('active tokenizer', path, create.name)
+
       const tokenizerResult =
         await cacheScope('model')
           .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
       const tokenizer = await create(await tokenizerResult.arrayBuffer())
       console.log('Loaded tokenizer')
+
+      // const __roundtripTokenizer = (text: string) => {
+      //   console.log({roundtripIn: text})
+      //   const out = tokenizer.decode(tokenizer.encode(text))
+      //   console.log({roundtripOut: out})
+      // }
+
+      // __roundtripTokenizer('boopity boop a snoot')
 
       await loadingModelWeights
       console.log('Loaded weights')
@@ -125,8 +138,9 @@ const initialize = async () => {
       }
 
       let logitsOnCpu: tvmjs.NDArray | undefined;
-      const sampleTokenFromLogits = (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
+      const sampleTokenFromLogits = async (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
         tvm.beginScope()
+        console.log({sampleTokenFromLogits: { temperature, top_p }})
 
         if (logitsOnCpu === undefined) {
           logitsOnCpu = tvm.detachFromCurrentScope(
@@ -147,12 +161,16 @@ const initialize = async () => {
         // we change the logits on cpu before doing sample
 
         tvm.endScope()
+        console.log({logits: logitsOnCpu.toArray()})
+
+        await targetDevice?.sync()
 
         return tvm.sampleTopPFromLogits(logitsOnCpu, temperature, top_p)
       }
 
-      const prefillStep = (text: string) => {
+      const prefillStep = async (text: string) => {
         const tokens = tokenize(text)
+        console.log('prefill tokens\n', tokens)
 
         tvm.beginScope()
 
@@ -180,10 +198,10 @@ const initialize = async () => {
 
         filledKvCacheLength += tokens.length // not sure if this is supposed to only increment after decoding?
 
-        return sampleTokenFromLogits(logits, temperature, top_p)
+        return await sampleTokenFromLogits(logits, temperature, top_p)
       }
 
-      const decodeStep = (lastToken: number) => {
+      const decodeStep = async (lastToken: number) => {
         tvm.beginScope()
         const inputNdArray = tvm.empty([1, 1], 'int32', targetDevice)
         inputNdArray.copyFrom([lastToken])
@@ -196,15 +214,16 @@ const initialize = async () => {
 
         filledKvCacheLength += 1
 
-        return sampleTokenFromLogits(logits, temperature, top_p)
+        return await sampleTokenFromLogits(logits, temperature, top_p)
       }
 
       let generatedTokens: number[] = []
 
       return {
-        setContext: (text: string) => {
+        setContext: async (text: string) => {
+          console.log({setContext: text})
           // TODO this probably wont work as is since vm.prefill is likely to be stateful
-          const nextToken = prefillStep(text)
+          const nextToken = await prefillStep(text)
 
           if (nextToken === undefined) {
             throw Error('Prefilled with no sampled next token')
@@ -215,6 +234,7 @@ const initialize = async () => {
           console.log({nextToken})
         },
         generate: async (prompt: string, stop: string) => {
+          console.log({generate: {prompt, stop}})
           // idea is we prefill with prompt as well as previously set context, but don't persist the prompt part
 
           // TODO this just generates based on setContext, ignoring prompt
@@ -228,7 +248,7 @@ const initialize = async () => {
           let completeText = ''
 
           while (!completeText.endsWith(stop) && completeText.length < 100) {
-            const nextToken = decodeStep(generatedTokens[generatedTokens.length - 1])
+            const nextToken = await decodeStep(generatedTokens[generatedTokens.length - 1])
 
             if (nextToken === undefined) {
               throw Error('Prefilled with no sampled next token')
@@ -272,7 +292,7 @@ type Op = string | {
 }
 
 type LoadedModel = {
-  setContext: (text: string) => void
+  setContext: (text: string) => Promise<void>
   generate: (prompt: string, stop: string) => Promise<string>
 }
 
@@ -299,7 +319,7 @@ const ad = (model: LoadedModel) => {
             if (typeof(op) === 'string') {
               return completion + op
             } else {
-              model.setContext(system + completion)
+              await model.setContext(system + completion)
               return completion + await model.generate(op.prompt, op.stop)
             }
           }, Promise.resolve(head))
@@ -313,7 +333,9 @@ export const test = async () => {
   const api = await initialize()
   const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
   const generator = ad(loadedModel)
-  const { template, a } = generator('You are a dungeon master. Generate a character based on the Dungeons and Dragons universe.')
+  const { template, a } = generator(
+    '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Generate a character based on the Dungeons and Dragons universe. [/INST] '
+  )
 
   const result = template`
   {
