@@ -24,18 +24,14 @@ const initialize = async () => {
 
   return {
     loadModel: async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice): Promise<LoadedModel> => {
-      const configResponse = await cacheScope('config').fetchWithCache(
-        new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
-      )
-
-      if (!configResponse.ok) {
-        throw Error('Invalid model config url. Check that <url>/mlc-chat-config.json exists and is reachable.')
-      }
+      const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
+      const configResponse = await cacheScope('config').fetchWithCache(configUrl)
+        // TODO ArtifactCache error is probably too cryptic if configurl is invalid
 
       console.log('Loaded config')
 
       const wasm = await (
-        spec.modelLibWasmUrl.includes('localhost')
+        spec.modelLibWasmUrl.includes('localhost') // never cache localhost
           ? fetch(spec.modelLibWasmUrl)
           : cacheScope('wasm').fetchWithCache(spec.modelLibWasmUrl)
       )
@@ -58,10 +54,14 @@ const initialize = async () => {
       const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, targetDevice, scope('model'))
 
       const config = await configResponse.json()
-      if (Array.isArray(config.tokenizer_files)) {
+
+      if (!Array.isArray(config.tokenizer_files)) {
         console.error(config)
         throw Error('Config json file is missing an array field named "tokenizer_files"')
       }
+
+      const temperature = config.temperature ?? 1.0
+      const top_p = config.top_p ?? 0.95
 
       const configTokenizerFiles = Object.entries({
         'tokenizer.model': Tokenizer.fromSentencePiece,
@@ -94,7 +94,7 @@ const initialize = async () => {
         vm.getFunction('prefill')
       )
 
-      const decoding = tvm.detachFromCurrentScope(
+      const decode = tvm.detachFromCurrentScope(
         vm.getFunction('decode')
       )
 
@@ -124,8 +124,38 @@ const initialize = async () => {
         return [...prefix, ...encodedText, ...postfix]
       }
 
-      const forward = (tokens: number[]) => {
+      let logitsOnCpu: tvmjs.NDArray | undefined;
+      const sampleTokenFromLogits = (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
         tvm.beginScope()
+
+        if (logitsOnCpu === undefined) {
+          logitsOnCpu = tvm.detachFromCurrentScope(
+            tvm.empty(logits.shape, logits.dtype, tvm.cpu())
+          )
+        } else {
+          if (logits.shape[0] != logitsOnCpu.shape[0]) {
+            throw Error('Logits changed shape')
+          }
+        }
+
+        logitsOnCpu.copyFrom(logits)
+        logits.dispose() // not sure if logits is at the right scope to be disposed from here
+
+        // we skip a new begin/end scope here, check https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L317
+        // if things break
+        // TODO mask
+        // we change the logits on cpu before doing sample
+
+        tvm.endScope()
+
+        return tvm.sampleTopPFromLogits(logitsOnCpu, temperature, top_p)
+      }
+
+      const prefillStep = (text: string) => {
+        const tokens = tokenize(text)
+
+        tvm.beginScope()
+
         const inputNdArray = tvm.empty([1, tokens.length], 'int32', targetDevice)
         inputNdArray.copyFrom(tokens)
         // this is not a direct translation, not sure if the nested begin/endscopes are necessary
@@ -137,23 +167,84 @@ const initialize = async () => {
         // i'm avoiding that, but if things break here check what's different
 
         const retValue = prefill(inputNdArray, seqLenShape, kvCache, params)
+          // TODO is prefill stateful?
+        
         const logits = tvm.detachFromCurrentScope(retValue.get(0))
         // skipping the endscope -> attachtocurrentscope because we're still in same scope here
 
         // TODO track seqlen, kv cache
         // it looks like filledkvcachelength is to set curpos for some steps (decode vs prefill)?
         tvm.endScope()
-        tvm.attachToCurrentScope(logits) // We expect that forward is called from an outer tvm scope
+        
+        // tvm.attachToCurrentScope(logits) // can I use unattached logits in sampleTokenFromLogits?
 
-        return logits
+        filledKvCacheLength += tokens.length // not sure if this is supposed to only increment after decoding?
+
+        return sampleTokenFromLogits(logits, temperature, top_p)
       }
+
+      const decodeStep = (lastToken: number) => {
+        tvm.beginScope()
+        const inputNdArray = tvm.empty([1, 1], 'int32', targetDevice)
+        inputNdArray.copyFrom([lastToken])
+
+        const seqLenShape = tvm.makeShapeTuple([filledKvCacheLength + 1])
+        const retValue = decode(inputNdArray, seqLenShape, kvCache, params)
+        const logits = tvm.detachFromCurrentScope(retValue.get(0))
+
+        tvm.endScope()
+
+        filledKvCacheLength += 1
+
+        return sampleTokenFromLogits(logits, temperature, top_p)
+      }
+
+      let generatedTokens: number[] = []
 
       return {
         setContext: (text: string) => {
+          // TODO this probably wont work as is since vm.prefill is likely to be stateful
+          const nextToken = prefillStep(text)
+
+          if (nextToken === undefined) {
+            throw Error('Prefilled with no sampled next token')
+          }
+
+          generatedTokens.push(nextToken)
+
+          console.log({nextToken})
         },
         generate: async (prompt: string, stop: string) => {
+          // idea is we prefill with prompt as well as previously set context, but don't persist the prompt part
+
+          // TODO this just generates based on setContext, ignoring prompt
+          // FIXME this will probably not work at all beyond just one single generate
+
+          if (generatedTokens.length === 0) {
+            // TODO refactor so that this is not possible
+            throw Error('Tried to generate without having called setContext')
+          }
+
+          let completeText = ''
+
+          while (!completeText.endsWith(stop) && completeText.length < 100) {
+            const nextToken = decodeStep(generatedTokens[generatedTokens.length - 1])
+
+            if (nextToken === undefined) {
+              throw Error('Prefilled with no sampled next token')
+            }
+
+            generatedTokens.push(nextToken)
+            console.log({nextToken})
+            // TODO hook for streaming generated tokens
+            // stream(tokenizer.decode(new Int32Array([nextToken])))
+
+            completeText = tokenizer.decode(new Int32Array(generatedTokens))
+            console.log({completeText})
+          }
+
           // we need to buffer at least the length of stop - if we see that the buffer is not stop, we output that section
-          return prompt + 'TODO'
+          return completeText
         }
       }
     }
@@ -226,7 +317,7 @@ export const test = async () => {
 
   const result = template`
   {
-    "name": "${a('name')}",
+    "description": "${a('description')}",
   }
   `
 
