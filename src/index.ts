@@ -23,7 +23,7 @@ const initialize = async () => {
   console.log('GPU found:\n', gpu)
 
   return {
-    loadModel: async (spec: ModelSpec): Promise<LoadedModel> => {
+    loadModel: async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice): Promise<LoadedModel> => {
       const configResponse = await cacheScope('config').fetchWithCache(
         new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
       )
@@ -45,15 +45,24 @@ const initialize = async () => {
         tvmjs.createPolyfillWASI()
       )
 
+      if (targetDevice === undefined) {
+        targetDevice = tvm.webgpu()
+      }
+
       tvm.initWebGPU(gpu.device) // TODO Do I need to initWebGPU before fetchNDArrayCache? I'd prefer to defer this until later
 
       tvm.registerInitProgressCallback(report => console.log(report.text))
 
       console.log('Model weights download started')
 
-      const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, tvm.webgpu(), scope('model'))
+      const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, targetDevice, scope('model'))
 
       const config = await configResponse.json()
+      if (Array.isArray(config.tokenizer_files)) {
+        console.error(config)
+        throw Error('Config json file is missing an array field named "tokenizer_files"')
+      }
+
       const configTokenizerFiles = Object.entries({
         'tokenizer.model': Tokenizer.fromSentencePiece,
         'tokenizer.json': Tokenizer.fromJSON
@@ -69,7 +78,7 @@ const initialize = async () => {
         await cacheScope('model')
           .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
-      const tokenizer = create(await tokenizerResult.arrayBuffer())
+      const tokenizer = await create(await tokenizerResult.arrayBuffer())
       console.log('Loaded tokenizer')
 
       await loadingModelWeights
@@ -78,7 +87,7 @@ const initialize = async () => {
       tvm.beginScope()
 
       const vm = tvm.detachFromCurrentScope(
-        tvm.createVirtualMachine(tvm.webgpu())
+        tvm.createVirtualMachine(targetDevice)
       )
 
       const prefill = tvm.detachFromCurrentScope(
@@ -108,9 +117,42 @@ const initialize = async () => {
 
       console.log('Loaded TVM pipelines')
 
+      const tokenize = (text: string, prefix: number[] = [], postfix: number[] = []) => {
+        // TODO figure out if we've exceeded max window size and handle
+        const encodedText = tokenizer.encode(text)
+
+        return [...prefix, ...encodedText, ...postfix]
+      }
+
+      const forward = (tokens: number[]) => {
+        tvm.beginScope()
+        const inputNdArray = tvm.empty([1, tokens.length], 'int32', targetDevice)
+        inputNdArray.copyFrom(tokens)
+        // this is not a direct translation, not sure if the nested begin/endscopes are necessary
+
+        // TODO curpos param
+        // https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L269
+        const seqLenShape = tvm.makeShapeTuple([tokens.length]) 
+        // NOTE llm_chat.ts conflates forward/decode here into a single forward function that handles both
+        // i'm avoiding that, but if things break here check what's different
+
+        const retValue = prefill(inputNdArray, seqLenShape, kvCache, params)
+        const logits = tvm.detachFromCurrentScope(retValue.get(0))
+        // skipping the endscope -> attachtocurrentscope because we're still in same scope here
+
+        // TODO track seqlen, kv cache
+        // it looks like filledkvcachelength is to set curpos for some steps (decode vs prefill)?
+        tvm.endScope()
+        tvm.attachToCurrentScope(logits) // We expect that forward is called from an outer tvm scope
+
+        return logits
+      }
+
       return {
-        setContext: (text: string) => {},
+        setContext: (text: string) => {
+        },
         generate: async (prompt: string, stop: string) => {
+          // we need to buffer at least the length of stop - if we see that the buffer is not stop, we output that section
           return prompt + 'TODO'
         }
       }
@@ -123,9 +165,13 @@ type AdTemplateExpression = {
   accept: any // TODO
 }
 
+
 const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
   ...expr,
-  stop: nextLiteral.slice(0, 1)
+  stop: nextLiteral.slice(0, 1) // determine stop from the next literal after expression
+    // NOTE this isn't going to tokenize correctly necessarily
+    // we will need to decode and then string compare
+    // there are always multiple ways to encode the same bit of string depending on what's before and after
 })
 
 type Op = string | {
@@ -154,7 +200,6 @@ const ad = (model: LoadedModel) => {
         ops.push(tail[i])
       }
 
-      // determine stops from the next literal after expression
       return {
         collect: async () =>
           ops.reduce<Promise<string>>(async (completion_, op) => {
@@ -179,9 +224,11 @@ export const test = async () => {
   const generator = ad(loadedModel)
   const { template, a } = generator('You are a dungeon master. Generate a character based on the Dungeons and Dragons universe.')
 
-  const result = template`{
+  const result = template`
+  {
     "name": "${a('name')}",
-  }`
+  }
+  `
 
   console.log(await result.collect())
 }
