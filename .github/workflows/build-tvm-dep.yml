@@ -1,0 +1,20 @@
+name: build-tvm-dep
+on:
+  push:
+    branches:
+      - gh-action
+  workflow-dispatch:
+
+jobs:
+  build-tvm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup emsdk
+        uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: 3.1.43
+          actions-cache-folder: '__emsdk-cache'
+      - name: verify
+        run: emcc -v
+
+
