@@ -9,12 +9,15 @@ jobs:
   build-tvm:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       - name: setup emsdk
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: 3.1.43
           actions-cache-folder: '__emsdk-cache'
-      - name: verify
-        run: emcc -v
-
-
+      - name: build tvm dependency
+        run: |
+          cd 3rdparty/relax/web
+          make
