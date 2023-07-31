@@ -31,11 +31,12 @@ console.log(await result.collect())
   - emcc: https://emscripten.org/docs/getting_started/downloads.html
 - build the tvmjs dependency first
   ```bash
-  git clone .. --recursive
+  git clone https://github.com/gsuuon/ad-llama.git --recursive
   cd 3rdparty/relax/web
 
-  // source ~/emsdk/emsdk_env.sh
+  # source ~/emsdk/emsdk_env.sh
   make
+  npm install
   npm run build
   ```
 - then either `npm run build` or `npm run dev` (which watches `src/` and serves `public/`)
