@@ -30,10 +30,10 @@ jobs:
         run: |
           cd 3rdparty/relax/web
           make
-          npm install
+          npm ci
           npm run build
 
-  build-ad-llama:
+  build-and-publish-if-tagged:
     runs-on: ubuntu-latest
     needs: build-tvm
     steps:
@@ -43,4 +43,8 @@ jobs:
         uses: ./.github/actions/cache-tvm
 
       - name: build ad-llama
-        run: npm install && npm run build
+        run: npm ci && npm run build
+
+      - name: publish
+        if: startsWith(github.event.ref, 'refs/tags/')
+        run: npm publish
