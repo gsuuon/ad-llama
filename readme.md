@@ -2,10 +2,9 @@
 Check [public/index.html](./public/index.html) for an example
 
 ```javascript
-import { initialize, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
+import { loadModel, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
 
-const api = await initialize()
-const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
 const generator = ad(loadedModel)
 
 const { template, a } = generator(
