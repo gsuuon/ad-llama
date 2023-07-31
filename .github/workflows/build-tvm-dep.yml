@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - gh-action
-  workflow-dispatch
+  workflow_dispatch:
 
 jobs:
   build-tvm:
