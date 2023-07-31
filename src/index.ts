@@ -307,11 +307,11 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 type AdTemplateExpression = {
   prompt: string,
   accept: any // TODO
-}
+} | string
 
 
 const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
-  ...expr,
+  ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
   stop: nextLiteral.slice(0, 1) // determine stop from the next literal after expression
     // NOTE this isn't going to tokenize correctly necessarily
     // we will need to decode and then string compare
@@ -320,8 +320,8 @@ const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
 
 type Op = string | {
   prompt: string
-  accept: any
   stop: string
+  accept?: any
 }
 
 type LoadedModel = {
