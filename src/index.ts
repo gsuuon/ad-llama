@@ -242,6 +242,11 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       }
 
       const nextToken = await prefillStep(prefillText)
+
+      if (nextToken === undefined) {
+        throw Error('Prefilled with no sampled next token')
+      }
+
       generatedTokens.push(nextToken)
 
       let completeText = ''
@@ -264,10 +269,6 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
         // TODO hook for streaming generated tokens
         // stream(tokenizer.decode(new Int32Array([nextToken])))
         const nextToken = await decodeStep(generatedTokens[generatedTokens.length - 1])
-
-        if (nextToken === undefined) {
-          throw Error('Prefilled with no sampled next token')
-        }
 
         const stopIdx = getStopIndex(completeText, nextToken, stop)
 
