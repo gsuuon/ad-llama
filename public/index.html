@@ -3,12 +3,19 @@
   <head>
     <meta charset="utf-8"/>
     <title>ad-llama demo</title>
+    <script type="importmap">
+    {
+      "imports" : {
+        "ad-llama": "./index.js"
+      }
+    }
+    </script>
     <script type="module" src="./index.js"></script>
   </head>
   <body>
     <h1>Hello, MLC! Open the console</h1>
     <script type="module">
-    import { initialize, ad, guessModelSpecFromPrebuiltId } from './index.js'
+    import { initialize, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
 
     const api = await initialize()
     const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
