@@ -25,6 +25,16 @@ const result = template`
 console.log(await result.collect())
 ```
 
+## Vite HMR
+Waiting for models to reload can be tedious, even when they're cached. ad-llama should work with vite HMR so the loaded models stay in memory. Put this in your source file to create an HMR boundary:
+```diff
+import { loadModel, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
+
++ if (import.meta.hot) { import.meta.hot.accept() }
+
+const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+```
+
 
 # Build
 - pre-reqs
