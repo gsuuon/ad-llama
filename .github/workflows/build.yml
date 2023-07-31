@@ -1,23 +1,34 @@
-name: build-tvm-dep
+name: build ad-llama
+
 on:
   push:
     branches:
       - gh-action
-  workflow_dispatch:
 
 jobs:
   build-tvm:
     runs-on: ubuntu-latest
+    if: false
     steps:
       - uses: actions/checkout@v3
         with:
           submodules: recursive
+
       - name: setup emsdk
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: 3.1.43
           actions-cache-folder: '__emsdk-cache'
+
       - name: build tvm dependency
         run: |
           cd 3rdparty/relax/web
           make
+
+  build-ad-llama:
+    runs-on: ubuntu-latest
+    needs: build-tvm
+    steps:
+      - uses: actions/checkout@v3
+      - name: build ad-llama
+        run: npm run build
