@@ -2,15 +2,15 @@
   "name": "ad-llama",
   "type": "module",
   "version": "0.0.1",
-  "description": "Ad-lib using LLaMa and template strings",
+  "description": "Structured inference with LLaMa 2 in your browser",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -w -c dev.config.mjs"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "gsuuon@gmail.com",
+  "license": "MIT",
   "devDependencies": {
     "@mlc-ai/web-tokenizers": "^0.1.0",
     "@rollup/plugin-commonjs": "^25.0.3",
