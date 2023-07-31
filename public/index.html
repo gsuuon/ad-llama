@@ -4,9 +4,31 @@
     <meta charset="utf-8"/>
     <title>ad-llama demo</title>
     <script type="module" src="./index.js"></script>
-    <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <h1>Hello, World!</h1>
+    <h1>Hello, MLC! Open the console</h1>
+    <script type="module">
+    import { initialize, ad, guessModelSpecFromPrebuiltId } from './index.js'
+
+    const api = await initialize()
+    const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+
+    const generator = ad(loadedModel)
+
+    const { template, a } = generator(
+      '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
+    )
+
+    const result = template`
+{
+"description": "${a('short description')}",
+"name": "${a('character name')}",
+"weapon": "${a('weapon')}",
+"class": "${a('class')}"
+}
+`
+
+    console.log(await result.collect())
+    </script>
   </body>
 </html>
