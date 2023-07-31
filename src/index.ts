@@ -16,7 +16,18 @@ export const guessModelSpecFromPrebuiltId = (id: string) => ({
     modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 
+let loadedModel: { spec: ModelSpec, model: LoadedModel } | undefined;
+
+/// <reference types="vite/client" />
+if (import.meta.hot) {
+  import.meta.hot.accept()
+}
+
 export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice): Promise<LoadedModel> => {
+  if (loadedModel?.spec.modelLibWasmUrl == spec.modelLibWasmUrl && loadedModel?.spec.modelWeightsConfigUrl == loadedModel?.spec.modelWeightsConfigUrl) {
+    return loadedModel.model
+  }
+
   const gpu = await tvmjs.detectGPUDevice()
   if (gpu == undefined) { throw Error('Cannot find GPU in environment') }
 
@@ -224,7 +235,7 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
     generatedTokens = []
   }
 
-  return {
+  const model = {
     setContext: async (text: string) => {
       context = text
       console.log('Context:', context)
@@ -287,6 +298,10 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       return completeText
     }
   }
+
+  loadedModel = { spec, model }
+
+  return model
 }
 
 type AdTemplateExpression = {

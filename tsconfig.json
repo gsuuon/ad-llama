@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "es2020",
     "moduleResolution": "nodenext",
+    "module": "es2020",
+    "types": ["vite/client"],
     "declaration": true,
     "outDir": "lib",
     "declarationMap": true,
