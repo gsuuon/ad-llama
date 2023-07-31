@@ -40,6 +40,7 @@ jobs:
         run: |
           cd 3rdparty/relax/web
           make
+          npm install
           npm run build
 
   build-ad-llama:
@@ -48,4 +49,4 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: build ad-llama
-        run: npm i && npm run build
+        run: npm install && npm run build
