@@ -29,7 +29,9 @@ const result = template`
 }
 `
 
-console.log(await result.collect())
+const asString = await result.collect()
+console.log(asString)
+console.dir(JSON.parse(asString))
     </code></pre>
     <script type="module">
     import { initialize, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
@@ -53,7 +55,9 @@ console.log(await result.collect())
 }
 `
 
-    console.log(await result.collect())
+    const asString = await result.collect()
+    console.log(asString)
+    console.dir(JSON.parse(asString))
     </script>
   </body>
 </html>

@@ -351,29 +351,3 @@ export const ad = (model: LoadedModel) => {
     a: (prompt: string, accept?: any) => ({ prompt, accept }),
   })
 }
-
-
-export const test = async () => {
-  const api = await initialize()
-  const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
-
-  const generator = ad(loadedModel)
-
-  const win = (window as any)
-  win.generator = generator
-
-  const { template, a } = generator(
-    '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
-  )
-
-  const result = template`
-  {
-    "description": "${a('short description')}",
-    "name": "${a('character name')}",
-    "weapon": "${a('weapon')}",
-    "class": "${a('class')}"
-  }
-  `
-
-  console.log(await result.collect())
-}
