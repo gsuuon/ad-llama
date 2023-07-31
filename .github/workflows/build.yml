@@ -10,16 +10,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
+      - name: get submodule commit hash
+        id: submodule-status
+        run: echo "status=$(git submodule status | sed 's/\ /_/')" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - uses: actions/cache@v3
+        id: cache
         with:
-          submodules: recursive
+          path: |
+            3rdparty/relax/web/lib
+            3rdparty/relax/web/dist
+          key: ${{ steps.submodule-status.outputs.status }}
+
+      - name: pull submodules
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        run: git submodule update --init
 
       - name: setup emsdk
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         uses: mymindstorm/setup-emsdk@v11
         with:
           version: 3.1.43
           actions-cache-folder: '__emsdk-cache'
 
       - name: build tvm dependency
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: |
           cd 3rdparty/relax/web
           make
@@ -30,4 +47,4 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: build ad-llama
-        run: npm run build
+        run: npm i && npm run build
