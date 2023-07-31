@@ -255,12 +255,6 @@ export const initialize = async () => {
 
             for (let i = 0; i < nextChars.length; i++) {
               if (completedAndNext.slice(0, completeText.length + i).endsWith(stop)) {
-                console.log({
-                  completedText,
-                  stop,
-                  completedAndNext,
-                  stopAt:completedAndNext.length - stop.length - 1
-                })
                 return completedAndNext.length - stop.length - 1
               }
             }
