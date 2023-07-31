@@ -48,3 +48,5 @@ jobs:
       - name: publish
         if: startsWith(github.event.ref, 'refs/tags/')
         run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
