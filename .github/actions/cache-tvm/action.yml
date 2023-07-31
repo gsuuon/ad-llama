@@ -1,0 +1,21 @@
+name: 'cache tvm lib and dist'
+
+outputs:
+  cache-hit:
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+  - name: get submodule commit hash
+    id: submodule-status
+    run: echo "status=$(git submodule status | sed 's/\ /_/')" >> $GITHUB_OUTPUT
+    shell: bash
+
+  - uses: actions/cache@v3
+    id: cache
+    with:
+      path: |
+        3rdparty/relax/web/lib
+        3rdparty/relax/web/package.json
+      key: ${{ steps.submodule-status.outputs.status }}
