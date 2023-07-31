@@ -40,6 +40,7 @@ jobs:
         run: |
           cd 3rdparty/relax/web
           make
+          npm run build
 
   build-ad-llama:
     runs-on: ubuntu-latest
