@@ -10,13 +10,13 @@ type ModelSpec = {
 const scope = (name?: string) => 'ad-llama' + name ? '/' + name : ''
 const cacheScope = (name: string) => new tvmjs.ArtifactCache(scope(name))
 
-/// FIXME This only works for Llama-2 models because of the wasm name
-const guessModelSpecFromPrebuiltId = (id: string) => ({
+// FIXME This only works for Llama-2 models because of the wasm name
+export const guessModelSpecFromPrebuiltId = (id: string) => ({
     modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
     modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 
-const initialize = async () => {
+export const initialize = async () => {
   const gpu = await tvmjs.detectGPUDevice()
   if (gpu == undefined) { throw Error('Cannot find GPU in environment') }
 
@@ -140,7 +140,6 @@ const initialize = async () => {
       let logitsOnCpu: tvmjs.NDArray | undefined;
       const sampleTokenFromLogits = async (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
         tvm.beginScope()
-        console.log({sampleTokenFromLogits: { temperature, top_p }})
 
         if (logitsOnCpu === undefined) {
           logitsOnCpu = tvm.detachFromCurrentScope(
@@ -161,7 +160,6 @@ const initialize = async () => {
         // we change the logits on cpu before doing sample
 
         tvm.endScope()
-        console.log({logits: logitsOnCpu.toArray()})
 
         await targetDevice?.sync()
 
@@ -170,8 +168,6 @@ const initialize = async () => {
 
       const prefillStep = async (text: string) => {
         const tokens = tokenize(text)
-        console.log('prefill tokens\n', tokens)
-
         tvm.beginScope()
 
         const inputNdArray = tvm.empty([1, tokens.length], 'int32', targetDevice)
@@ -218,52 +214,83 @@ const initialize = async () => {
       }
 
       let generatedTokens: number[] = []
+      let context = '<<sys>>You are a helpful assistant<</sys>>\n\n[INST]'
+
+      const unfill = async () => {
+        clearKvCaches(kvCache)
+        filledKvCacheLength = 0
+        if (logitsOnCpu !== undefined) {
+          logitsOnCpu.dispose()
+          logitsOnCpu = undefined
+        }
+        generatedTokens = []
+      }
 
       return {
         setContext: async (text: string) => {
-          console.log({setContext: text})
-          // TODO this probably wont work as is since vm.prefill is likely to be stateful
-          const nextToken = await prefillStep(text)
+          context = text
+          console.log('Context:', context)
 
-          if (nextToken === undefined) {
-            throw Error('Prefilled with no sampled next token')
-          }
-
-          generatedTokens.push(nextToken)
-
-          console.log({nextToken})
+          // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
+          // Is that possible? can I prefill with existing kvCache?
         },
-        generate: async (prompt: string, stop: string) => {
-          console.log({generate: {prompt, stop}})
-          // idea is we prefill with prompt as well as previously set context, but don't persist the prompt part
+        generate: async (prompt: string, completion: string, stop: string, maxTokens: number = 400) => {
+          const prefillText = `${context} Generate a ${prompt} [/INST] ${completion}`
+          console.log('Prompt:', prompt)
+          console.info({generate: {prompt, stop, context: prefillText}})
 
-          // TODO this just generates based on setContext, ignoring prompt
-          // FIXME this will probably not work at all beyond just one single generate
-
-          if (generatedTokens.length === 0) {
-            // TODO refactor so that this is not possible
-            throw Error('Tried to generate without having called setContext')
+          if (generatedTokens.length > 0) {
+            await unfill()
           }
+
+          const nextToken = await prefillStep(prefillText)
+          generatedTokens.push(nextToken)
 
           let completeText = ''
 
-          while (!completeText.endsWith(stop) && completeText.length < 100) {
+          const getStopIndex = (completedText: string, nextToken: number, stop: string) => {
+            // Checks each new character in next token to see if it forms the stop sequence with already completed text
+            const nextChars = tokenizer.decode(new Int32Array([nextToken]))
+            const completedAndNext = completedText + nextChars
+
+            for (let i = 0; i < nextChars.length; i++) {
+              if (completedAndNext.slice(0, completeText.length + i).endsWith(stop)) {
+                console.log({
+                  completedText,
+                  stop,
+                  completedAndNext,
+                  stopAt:completedAndNext.length - stop.length - 1
+                })
+                return completedAndNext.length - stop.length - 1
+              }
+            }
+
+            return -1
+          }
+
+          while (completeText.length < maxTokens) {
+            // TODO hook for streaming generated tokens
+            // stream(tokenizer.decode(new Int32Array([nextToken])))
             const nextToken = await decodeStep(generatedTokens[generatedTokens.length - 1])
 
             if (nextToken === undefined) {
               throw Error('Prefilled with no sampled next token')
             }
 
-            generatedTokens.push(nextToken)
-            console.log({nextToken})
-            // TODO hook for streaming generated tokens
-            // stream(tokenizer.decode(new Int32Array([nextToken])))
+            const stopIdx = getStopIndex(completeText, nextToken, stop)
 
+            if (stopIdx !== -1) {
+              completeText = completeText.slice(0, stopIdx)
+              // NOTE completeText may not always be exactly generatedTokens decoded
+              break
+            }
+
+            generatedTokens.push(nextToken)
             completeText = tokenizer.decode(new Int32Array(generatedTokens))
-            console.log({completeText})
+
+            console.log(completeText)
           }
 
-          // we need to buffer at least the length of stop - if we see that the buffer is not stop, we output that section
           return completeText
         }
       }
@@ -293,11 +320,11 @@ type Op = string | {
 
 type LoadedModel = {
   setContext: (text: string) => Promise<void>
-  generate: (prompt: string, stop: string) => Promise<string>
+  generate: (prompt: string, completion: string, stop: string) => Promise<string>
 }
 
 // I think this would work better with a completion model than chat model
-const ad = (model: LoadedModel) => {
+export const ad = (model: LoadedModel) => {
   return (system: string) => ({
     template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
@@ -312,34 +339,45 @@ const ad = (model: LoadedModel) => {
       }
 
       return {
-        collect: async () =>
-          ops.reduce<Promise<string>>(async (completion_, op) => {
+        collect: async () => {
+          await model.setContext(system)
+
+          return ops.reduce<Promise<string>>(async (completion_, op) => {
             const completion = await completion_
 
             if (typeof(op) === 'string') {
               return completion + op
             } else {
-              await model.setContext(system + completion)
-              return completion + await model.generate(op.prompt, op.stop)
+              return completion + await model.generate(op.prompt, completion, op.stop)
             }
           }, Promise.resolve(head))
+        }
       }
     },
     a: (prompt: string, accept?: any) => ({ prompt, accept }),
   })
 }
 
+
 export const test = async () => {
   const api = await initialize()
   const loadedModel = await api.loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+
   const generator = ad(loadedModel)
+
+  const win = (window as any)
+  win.generator = generator
+
   const { template, a } = generator(
-    '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Generate a character based on the Dungeons and Dragons universe. [/INST] '
+    '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
   )
 
   const result = template`
   {
-    "description": "${a('description')}",
+    "description": "${a('short description')}",
+    "name": "${a('character name')}",
+    "weapon": "${a('weapon')}",
+    "class": "${a('class')}"
   }
   `
 
