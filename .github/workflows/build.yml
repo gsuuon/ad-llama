@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - id: cache
-        uses: .github/actions/cache-tvm
+        uses: /.github/actions/cache-tvm
 
       - name: pull submodules
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - id: cache
-        uses: .github/actions/cache-tvm
+        uses: /.github/actions/cache-tvm
 
       - name: build ad-llama
         run: npm install && npm run build
