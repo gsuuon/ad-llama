@@ -34,6 +34,7 @@ console.log(await result.collect())
 
   // source ~/emsdk/emsdk_env.sh
   make
+  npm run build
   ```
 - then either `npm run build` or `npm run dev` (which watches `src/` and serves `public/`)
 
