@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - gh-action
+    tags:
+      - v*
 
 jobs:
   build-tvm:
