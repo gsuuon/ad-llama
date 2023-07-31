@@ -1,6 +1,8 @@
 # Usage
 Check [public/index.html](./public/index.html) for an example
 
+`npm install -S ad-llama`
+
 ```javascript
 import { loadModel, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
 
