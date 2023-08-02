@@ -241,9 +241,14 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
     },
-    generate: async (prompt: string, completion: string, stop: string, maxTokens: number = 400) => {
-      const prefillText = `${context} Generate a ${prompt} [/INST] ${completion}`
-      console.log('Prompt:', prompt)
+    generate: async (
+      prompt: string,
+      completion: string,
+      stop: string,
+      stream?: GenerationStreamHandler,
+      maxTokens: number = 400
+    ) => {
+      const prefillText = `${context} Generate ${prompt} [/INST] ${completion}`
       console.info({generate: {prompt, stop, context: prefillText}})
 
       if (filledKvCacheLength > 0) {
@@ -265,9 +270,9 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
         // This gets around the issue where our stop is `"` but the next token generates `",` which
         // won't satisfy a straightforward endswith(stop)
 
-        for (let i = 0; i < tokenDecodedText.length; i++) {
-          if (text.slice(0, text.length + i).endsWith(stop)) {
-            return text.length - stop.length
+        for (let i = tokenDecodedText.length; i >= 0; i--) {
+          if (text.slice(0, text.length - i).endsWith(stop)) {
+            return text.length - i - stop.length
           }
         }
 
@@ -281,20 +286,30 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
         const updatedText = tokenizer.decode(new Int32Array(tokens))
 
-        // decoding individual tokens and combining does not produce same result as decoding seq of tokens
         const tokenDecodedText = updatedText.slice(completedText.length)
+          // decoding individual tokens and combining does not produce
+          // same result as decoding seq of tokens
 
         const stopIdx = getStopIndex(updatedText, tokenDecodedText, stop)
 
         if (stopIdx !== -1) {
           const acceptedCompleteText = updatedText.slice(0, stopIdx)
+
+          stream?.({
+            content: acceptedCompleteText.slice(completedText.length),
+            type: 'gen'
+          })
+
           completedText = acceptedCompleteText
-          // NOTE completeText may not always be exactly generatedTokens decoded
           break
         }
 
+        stream?.({
+          content: tokenDecodedText,
+          type: 'gen'
+        })
+
         completedText = updatedText
-        console.log(completedText)
       }
 
       return completedText
@@ -311,6 +326,7 @@ type AdTemplateExpression = {
   accept: any // TODO
 } | string
 
+type GenerationStreamHandler = (partial: {content: string, type: 'gen' | 'lit'}) => void
 
 const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
   ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
@@ -328,7 +344,12 @@ type Op = string | {
 
 type LoadedModel = {
   setContext: (text: string) => Promise<void>
-  generate: (prompt: string, completion: string, stop: string) => Promise<string>
+  generate: (
+    prompt: string,
+    completion: string,
+    stop: string,
+    stream?: GenerationStreamHandler
+  ) => Promise<string>
 }
 
 // I think this would work better with a completion model than chat model
@@ -347,21 +368,32 @@ export const ad = (model: LoadedModel) => {
       }
 
       return {
-        collect: async () => {
+        collect: async (stream?: GenerationStreamHandler) => {
           await model.setContext(system)
+          stream?.({
+            content: head,
+            type: 'lit'
+          })
 
           return ops.reduce<Promise<string>>(async (completion_, op) => {
             const completion = await completion_
 
             if (typeof(op) === 'string') {
+              stream?.({
+                content: op,
+                type: 'lit'
+              })
               return completion + op
             } else {
-              return completion + await model.generate(op.prompt, completion, op.stop)
+              return completion + await model.generate(op.prompt, completion, op.stop, stream)
             }
           }, Promise.resolve(head))
         }
       }
     },
-    a: (prompt: string, accept?: any) => ({ prompt, accept }),
+    a: (prompt: string, accept?: any) => ({
+      prompt: `a ${prompt}`,
+      accept,
+    }),
   })
 }
