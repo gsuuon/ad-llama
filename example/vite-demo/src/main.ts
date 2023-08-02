@@ -5,12 +5,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <h1>ad-llama + vite HMR</h1>
     <pre>
-      <code>
-{
-  "description": "\${(a('description'))}",
-  "weapon": "\${a('weapon')}",
-  "items": ["\${'three items in their possession'}]
-}
+      <code id='template'>
       </code>
     </pre>
     <p id='text'></p>
@@ -26,18 +21,40 @@ const { template, a } = gen('You are a dungeon master.', 'Create an interesting 
 const result = template`
 {
   "description": "${(a('description', {maxTokens: 1000, stops: ['\n']}))}",
+  "name": "${(a('name'))}",
   "weapon": "${a('weapon')}",
-  "items": ["${'three items in their possession'}]
+  "items": [
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    },
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    },
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    }
+  ]
 }
 `
 
 const textEl = document.querySelector('#text')!
+const templateEl = document.querySelector('#template')!
 
 const text = await result.collect(partial => {
-  const el = document.createElement('span')
-  el.textContent = partial.content
-  el.className = partial.type
-  textEl.appendChild(el)
+  if (partial.type === 'template') {
+    templateEl.textContent = partial.content
+  } else {
+    const el = document.createElement('span')
+    el.textContent = partial.content
+    el.className = partial.type
+    textEl.appendChild(el)
+  }
 })
 
 console.log(text)
