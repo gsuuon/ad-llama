@@ -222,17 +222,15 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
     return await sampleTokenFromLogits(logits, temperature, top_p)
   }
 
-  let generatedTokens: number[] = []
   let context = '<<sys>>You are a helpful assistant<</sys>>\n\n[INST]'
 
-  const unfill = async () => {
+  const unfill = () => {
     clearKvCaches(kvCache)
     filledKvCacheLength = 0
     if (logitsOnCpu !== undefined) {
       logitsOnCpu.dispose()
       logitsOnCpu = undefined
     }
-    generatedTokens = []
   }
 
   const model = {
@@ -248,8 +246,8 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       console.log('Prompt:', prompt)
       console.info({generate: {prompt, stop, context: prefillText}})
 
-      if (generatedTokens.length > 0) {
-        await unfill()
+      if (filledKvCacheLength > 0) {
+        unfill()
       }
 
       const nextToken = await prefillStep(prefillText)
@@ -258,44 +256,48 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
         throw Error('Prefilled with no sampled next token')
       }
 
-      generatedTokens.push(nextToken)
+      let tokens = [nextToken]
+      let completedText = ''
 
-      let completeText = ''
+      const getStopIndex = (text: string, tokenDecodedText: string, stop: string) => {
+        // Check each new character in next token to see if it forms the stop sequence
+        // with already completed text.
+        // This gets around the issue where our stop is `"` but the next token generates `",` which
+        // won't satisfy a straightforward endswith(stop)
 
-      const getStopIndex = (completedText: string, nextToken: number, stop: string) => {
-        // Checks each new character in next token to see if it forms the stop sequence with already completed text
-        const nextChars = tokenizer.decode(new Int32Array([nextToken]))
-        const completedAndNext = completedText + nextChars
-
-        for (let i = 0; i < nextChars.length; i++) {
-          if (completedAndNext.slice(0, completeText.length + i).endsWith(stop)) {
-            return completedAndNext.length - stop.length - 1
+        for (let i = 0; i < tokenDecodedText.length; i++) {
+          if (text.slice(0, text.length + i).endsWith(stop)) {
+            return text.length - stop.length
           }
         }
 
         return -1
       }
 
-      while (completeText.length < maxTokens) {
-        // TODO hook for streaming generated tokens
-        // stream(tokenizer.decode(new Int32Array([nextToken])))
-        const nextToken = await decodeStep(generatedTokens[generatedTokens.length - 1])
+      while (completedText.length < maxTokens) {
+        const nextToken = await decodeStep(tokens[tokens.length - 1])
 
-        const stopIdx = getStopIndex(completeText, nextToken, stop)
+        tokens.push(nextToken)
+
+        const updatedText = tokenizer.decode(new Int32Array(tokens))
+
+        // decoding individual tokens and combining does not produce same result as decoding seq of tokens
+        const tokenDecodedText = updatedText.slice(completedText.length)
+
+        const stopIdx = getStopIndex(updatedText, tokenDecodedText, stop)
 
         if (stopIdx !== -1) {
-          completeText = completeText.slice(0, stopIdx)
+          const acceptedCompleteText = updatedText.slice(0, stopIdx)
+          completedText = acceptedCompleteText
           // NOTE completeText may not always be exactly generatedTokens decoded
           break
         }
 
-        generatedTokens.push(nextToken)
-        completeText = tokenizer.decode(new Int32Array(generatedTokens))
-
-        console.log(completeText)
+        completedText = updatedText
+        console.log(completedText)
       }
 
-      return completeText
+      return completedText
     }
   }
 
