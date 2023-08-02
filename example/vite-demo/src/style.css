@@ -59,7 +59,7 @@ h1 {
 #gh {
   width: 1em;
   height: 1em;
-  background-image: url('github-mark-white.svg');
+  background-image: url('/github-mark-white.svg');
   background-size: contain;
   display: inline-block;
 }
@@ -119,6 +119,6 @@ button:focus-visible {
     background-color: lightgreen;
   }
   #gh {
-    background-image: url('github-mark.svg')
+    background-image: url('/github-mark.svg')
   }
 }

@@ -1,5 +1,5 @@
 # Usage
-Check [public/index.html](./public/index.html) for an example
+Check [example/vite-demo](./example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
 
 `npm install -S ad-llama`
 
