@@ -31,16 +31,25 @@ body {
   min-height: 100vh;
 }
 
+p#text {
+  white-space: pre-wrap;
+}
+
+p#text span.gen {
+  background-color: green;
+  margin-left: 2px;
+}
+
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
+  text-align: center;
 }
 
 #app {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
-  text-align: center;
 }
 
 .logo {
