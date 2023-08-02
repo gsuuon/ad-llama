@@ -247,12 +247,12 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
     generate: async (
       prompt: string,
       completion: string,
-      stop: string,
+      stops: string[],
       stream?: GenerationStreamHandler,
       maxTokens: number = 400
     ) => {
       const prefillText = `${system_}${preprompt_} Generate ${prompt} [/INST] ${completion}`
-      console.info({generate: {prompt, stop, context: prefillText}})
+      console.info({generate: {prompt, stops, context: prefillText}})
 
       if (filledKvCacheLength > 0) {
         unfill()
@@ -267,15 +267,17 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       let tokens = [nextToken]
       let completedText = ''
 
-      const getStopIndex = (text: string, tokenDecodedText: string, stop: string) => {
+      const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
         // Check each new character in next token to see if it forms the stop sequence
         // with already completed text.
         // This gets around the issue where our stop is `"` but the next token generates `",` which
         // won't satisfy a straightforward endswith(stop)
 
         for (let i = tokenDecodedText.length; i >= 0; i--) {
-          if (text.slice(0, text.length - i).endsWith(stop)) {
-            return text.length - i - stop.length
+          for (const stop of stops) {
+            if (text.slice(0, text.length - i).endsWith(stop)) {
+              return text.length - i - stop.length
+            }
           }
         }
 
@@ -294,7 +296,7 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
           // decoding individual tokens and combining does not produce
           // same result as decoding seq of tokens
 
-        const stopIdx = getStopIndex(updatedText, tokenDecodedText, stop)
+        const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
 
         if (stopIdx !== -1) {
           const acceptedCompleteText = updatedText.slice(0, stopIdx)
@@ -351,7 +353,7 @@ type LoadedModel = {
   generate: (
     prompt: string,
     completion: string,
-    stop: string,
+    stops: string[],
     stream?: GenerationStreamHandler,
     maxTokens?: number
   ) => Promise<string>
@@ -391,7 +393,13 @@ export const ad = (model: LoadedModel) => {
               })
               return completion + op
             } else {
-              return completion + await model.generate(op.prompt, completion, op.stop, stream, op.accept?.maxTokens)
+              return completion + await model.generate(
+                op.prompt,
+                completion,
+                [op.stop],
+                stream,
+                op.accept?.maxTokens
+              )
             }
           }, Promise.resolve(head))
         }
