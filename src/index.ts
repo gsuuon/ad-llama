@@ -222,7 +222,8 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
     return await sampleTokenFromLogits(logits, temperature, top_p)
   }
 
-  let context = '<<sys>>You are a helpful assistant<</sys>>\n\n[INST]'
+  let system_ = '<<sys>>You are a helpful assistant<</sys>>\n\n'
+  let preprompt_ = '[INST]';
 
   const unfill = () => {
     clearKvCaches(kvCache)
@@ -234,9 +235,11 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
   }
 
   const model = {
-    setContext: async (text: string) => {
-      context = text
-      console.log('Context:', context)
+    setContext: async (system: string, preprompt?: string) => {
+      system_ = `<<sys>>${system}<</sys>>\n\n`
+      preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
+
+      console.log('Context:', system, preprompt)
 
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
@@ -248,7 +251,7 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
       stream?: GenerationStreamHandler,
       maxTokens: number = 400
     ) => {
-      const prefillText = `${context} Generate ${prompt} [/INST] ${completion}`
+      const prefillText = `${system_}${preprompt_} Generate ${prompt} [/INST] ${completion}`
       console.info({generate: {prompt, stop, context: prefillText}})
 
       if (filledKvCacheLength > 0) {
@@ -279,6 +282,7 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
         return -1
       }
 
+      // TODO eos token
       while (completedText.length < maxTokens) {
         const nextToken = await decodeStep(tokens[tokens.length - 1])
 
@@ -343,7 +347,7 @@ type Op = string | {
 }
 
 type LoadedModel = {
-  setContext: (text: string) => Promise<void>
+  setContext: (system: string, preprompt?: string) => Promise<void>
   generate: (
     prompt: string,
     completion: string,
@@ -354,7 +358,7 @@ type LoadedModel = {
 
 // I think this would work better with a completion model than chat model
 export const ad = (model: LoadedModel) => {
-  return (system: string) => ({
+  return (system: string, preprompt?: string) => ({
     template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 
@@ -369,7 +373,8 @@ export const ad = (model: LoadedModel) => {
 
       return {
         collect: async (stream?: GenerationStreamHandler) => {
-          await model.setContext(system)
+          await model.setContext(system, preprompt)
+
           stream?.({
             content: head,
             type: 'lit'
