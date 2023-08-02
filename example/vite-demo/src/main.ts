@@ -4,6 +4,8 @@ import { ad, guessModelSpecFromPrebuiltId, loadModel } from 'ad-llama'
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
     <h1>ad-llama + vite HMR</h1>
+    <p id='system'></p>
+    <p id='preprompt'></p>
     <pre>
       <code id='template'>
       </code>
@@ -44,11 +46,12 @@ const result = template`
 `
 
 const textEl = document.querySelector('#text')!
-const templateEl = document.querySelector('#template')!
 
 const text = await result.collect(partial => {
   if (partial.type === 'template') {
-    templateEl.textContent = partial.content
+    document.querySelector('#template')!.textContent = partial.content
+    document.querySelector('#system')!.textContent = partial.system
+    document.querySelector('#preprompt')!.textContent = partial.preprompt ?? ''
   } else {
     const el = document.createElement('span')
     el.textContent = partial.content
