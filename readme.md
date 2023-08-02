@@ -10,7 +10,8 @@ const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-cha
 const generator = ad(loadedModel)
 
 const { template, a } = generator(
-  '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
+  'You are a dungeon master.',
+  'Create a character based on the Dungeons and Dragons universe.'
 )
 
 const result = template`
