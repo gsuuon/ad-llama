@@ -396,7 +396,7 @@ export const ad = (model: LoadedModel) => {
               return completion + await model.generate(
                 op.prompt,
                 completion,
-                [op.stop],
+                [op.stop, ...(op.accept?.stops ?? [])],
                 stream,
                 op.accept?.maxTokens
               )
