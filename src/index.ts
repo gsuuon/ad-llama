@@ -332,7 +332,7 @@ type AdTemplateExpression = {
   accept: any // TODO
 } | string
 
-type GenerationStreamHandler = (partial: {content: string, type: 'gen' | 'lit'}) => void
+type GenerationStreamHandler = (partial: {content: string, type: 'gen' | 'lit' | 'template'}) => void
 
 const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
   ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
@@ -378,10 +378,23 @@ export const ad = (model: LoadedModel) => {
         collect: async (stream?: GenerationStreamHandler) => {
           await model.setContext(system, preprompt)
 
-          stream?.({
-            content: head,
-            type: 'lit'
-          })
+          if (stream) {
+            stream({
+              content: ops.reduce<string>( (completion, op) => {
+                if (typeof(op) === 'string') {
+                  return completion + op
+                } else {
+                  return completion + `((${op.prompt}))`
+                }
+              }, head),
+              type: 'template'
+            })
+
+            stream({
+              content: head,
+              type: 'lit'
+            })
+          }
 
           return ops.reduce<Promise<string>>(async (completion_, op) => {
             const completion = await completion_
