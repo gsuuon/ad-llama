@@ -31,13 +31,17 @@ body {
   min-height: 100vh;
 }
 
-p#text {
+#completion {
   white-space: pre-wrap;
 }
 
-p#text span.gen {
-  background-color: green;
+#completion span.gen {
+  background-color: darkgreen;
   margin-left: 2px;
+}
+
+#progress {
+  white-space: pre-wrap;
 }
 
 h1 {
@@ -50,6 +54,14 @@ h1 {
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem;
+}
+
+#gh {
+  width: 1em;
+  height: 1em;
+  background-image: url('github-mark-white.svg');
+  background-size: contain;
+  display: inline-block;
 }
 
 .logo {
@@ -102,5 +114,11 @@ button:focus-visible {
   }
   button {
     background-color: #f9f9f9;
+  }
+  #completion span.gen {
+    background-color: lightgreen;
+  }
+  #gh {
+    background-image: url('github-mark.svg')
   }
 }
