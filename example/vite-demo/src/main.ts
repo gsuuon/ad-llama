@@ -21,11 +21,11 @@ if (import.meta.hot) { import.meta.hot.accept() }
 
 const gen = ad(await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1')))
 
-const { template, a } = gen('<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create an interesting character based on the Dungeons and Dragons universe.')
+const { template, a } = gen('You are a dungeon master.', 'Create an interesting character based on the Dungeons and Dragons universe.')
 
 const result = template`
 {
-  "description": "${(a('description'))}",
+  "description": "${(a('description', {maxTokens: 1000, stops: ['\n']}))}",
   "weapon": "${a('weapon')}",
   "items": ["${'three items in their possession'}]
 }
