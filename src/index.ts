@@ -23,24 +23,54 @@ if (import.meta.hot) {
   import.meta.hot.accept()
 }
 
-export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice): Promise<LoadedModel> => {
+type LoadReport = {
+  loadModel?: 'waiting' | 'done'
+  loadTokenizer?: 'waiting' | string | 'done'
+  loadModelConfig?: 'waiting' | string | 'done'
+  loadModelFromCache?: number
+  loadModelFromWeb?: number
+  loadGPUShaders?: 'waiting' | number | 'done'
+  detectGPU?: 'waiting' | string | 'failed'
+  modelSpec?: ModelSpec
+  ready?: boolean
+}
+
+export const loadModel = async (
+  spec: ModelSpec,
+  targetDevice?: tvmjs.DLDevice,
+  report?: (loadReport: LoadReport) => void
+): Promise<LoadedModel> => {
   if (loadedModel?.spec.modelLibWasmUrl == spec.modelLibWasmUrl && loadedModel?.spec.modelWeightsConfigUrl == loadedModel?.spec.modelWeightsConfigUrl) {
     return loadedModel.model
   }
 
+  let loadReport: LoadReport = { modelSpec: spec }
+
+  const updateReport = (update: LoadReport) => {
+    loadReport = {
+      ...loadReport,
+      ...update
+    }
+    report?.(loadReport)
+  }
+
+  updateReport({detectGPU: 'waiting'})
+
   const gpu = await tvmjs.detectGPUDevice()
-  if (gpu == undefined) { throw Error('Cannot find GPU in environment') }
-
-  console.log('GPU found:\n', gpu)
-
-  console.log('Loading model')
-  console.log(spec)
+  if (gpu == undefined) {
+    updateReport({detectGPU: 'failed'})
+    throw Error('Cannot find GPU in environment')
+  }
+  updateReport({
+    detectGPU: gpu.adapterInfo.vendor,
+    loadModelConfig: 'waiting'
+  })
 
   const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
   const configResponse = await cacheScope('config').fetchWithCache(configUrl)
   // TODO ArtifactCache error is probably too cryptic if configurl is invalid
 
-  console.log('Loaded config')
+  updateReport({ loadModelConfig: 'done' })
 
   const wasm = await (
     spec.modelLibWasmUrl.includes('localhost') // never cache localhost
@@ -59,9 +89,19 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
   tvm.initWebGPU(gpu.device) // TODO Do I need to initWebGPU before fetchNDArrayCache? I'd prefer to defer this until later
 
-  tvm.registerInitProgressCallback(report => console.log(report.text))
+  tvm.registerInitProgressCallback(report => {
+    if (loadReport.loadGPUShaders) {
+      updateReport({ loadGPUShaders: report.progress })
+    } else {
+      if (report.cacheOnly) {
+        updateReport({ loadModelFromCache: report.progress })
+      } else {
+        updateReport({ loadModelFromWeb: report.progress })
+      }
+    }
+  })
 
-  console.log('Model weights download started')
+  updateReport({ loadModel: 'waiting' })
 
   const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, targetDevice, scope('model'))
 
@@ -69,11 +109,16 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
   if (!Array.isArray(config.tokenizer_files)) {
     console.error(config)
-    throw Error('Config json file is missing an array field named "tokenizer_files"')
+
+    const err = 'Config json file is missing an array field named "tokenizer_files"'
+    updateReport({ loadModelConfig: err })
+    throw Error(err)
   }
 
   const temperature = config.temperature ?? 1.0
   const top_p = config.top_p ?? 0.95
+
+  updateReport({ loadTokenizer: 'waiting' })
 
   const configTokenizerFiles = Object.entries({
     'tokenizer.model': Tokenizer.fromSentencePiece,
@@ -81,30 +126,24 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
   }).find(([file, _create]) => config.tokenizer_files.includes(file))
 
   if (configTokenizerFiles == undefined) {
-    throw Error('Cant handle tokenizer files ' + config.tokenizer_files)
+    const err = `Cant handle tokenizer files ${config.tokenizer_files}`;
+    updateReport({ loadTokenizer: err });
+    throw Error(err);
   }
 
   const [path, create] = configTokenizerFiles
-
-  console.log('active tokenizer', path, create.name)
 
   const tokenizerResult =
     await cacheScope('model')
     .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
-  console.log('Loaded tokenizer')
 
-  // const __roundtripTokenizer = (text: string) => {
-  //   console.log({roundtripIn: text})
-  //   const out = tokenizer.decode(tokenizer.encode(text))
-  //   console.log({roundtripOut: out})
-  // }
-
-  // __roundtripTokenizer('boopity boop a snoot')
+  updateReport({ loadTokenizer: 'done' })
 
   await loadingModelWeights
-  console.log('Loaded weights')
+
+  updateReport({ loadModel: 'done' })
 
   tvm.beginScope()
 
@@ -135,9 +174,11 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
   tvm.endScope()
 
+  updateReport({ loadGPUShaders: 'waiting' })
+
   await tvm.asyncLoadWebGPUPiplines(vm.getInternalModule())
 
-  console.log('Loaded TVM pipelines')
+  updateReport({ loadGPUShaders: 'done' })
 
   const tokenize = (text: string, prefix: number[] = [], postfix: number[] = []) => {
     // TODO figure out if we've exceeded max window size and handle
@@ -147,6 +188,7 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
   }
 
   let logitsOnCpu: tvmjs.NDArray | undefined;
+
   const sampleTokenFromLogits = async (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
     tvm.beginScope()
 
@@ -303,7 +345,8 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
           stream?.({
             content: acceptedCompleteText.slice(completedText.length),
-            type: 'gen'
+            type: 'gen',
+            prompt
           })
 
           completedText = acceptedCompleteText
@@ -312,7 +355,8 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
         stream?.({
           content: tokenDecodedText,
-          type: 'gen'
+          type: 'gen',
+          prompt
         })
 
         completedText = updatedText
@@ -324,6 +368,8 @@ export const loadModel = async (spec: ModelSpec, targetDevice?: tvmjs.DLDevice):
 
   loadedModel = { spec, model }
 
+  updateReport({ ready: true })
+
   return model
 }
 
@@ -333,8 +379,12 @@ type AdTemplateExpression = {
 } | string
 
 type StreamPartial = {
-  content: string,
-  type: 'gen' | 'lit'
+  content: string
+  type: 'lit'
+} | {
+  content: string
+  type: 'gen'
+  prompt: string
 } | {
   type: 'template',
   content: string,
@@ -394,7 +444,7 @@ export const ad = (model: LoadedModel) => {
                 if (typeof(op) === 'string') {
                   return completion + op
                 } else {
-                  return completion + `((${op.prompt}))`
+                  return completion + `\${'${op.prompt}'}`
                 }
               }, head),
               type: 'template',
