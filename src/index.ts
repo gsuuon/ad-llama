@@ -332,7 +332,17 @@ type AdTemplateExpression = {
   accept: any // TODO
 } | string
 
-type GenerationStreamHandler = (partial: {content: string, type: 'gen' | 'lit' | 'template'}) => void
+type StreamPartial = {
+  content: string,
+  type: 'gen' | 'lit'
+} | {
+  type: 'template',
+  content: string,
+  system: string,
+  preprompt?: string
+}
+
+type GenerationStreamHandler = (partial: StreamPartial) => void
 
 const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
   ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
@@ -387,7 +397,9 @@ export const ad = (model: LoadedModel) => {
                   return completion + `((${op.prompt}))`
                 }
               }, head),
-              type: 'template'
+              type: 'template',
+              system,
+              preprompt
             })
 
             stream({
