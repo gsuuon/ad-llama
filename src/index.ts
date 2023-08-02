@@ -352,7 +352,8 @@ type LoadedModel = {
     prompt: string,
     completion: string,
     stop: string,
-    stream?: GenerationStreamHandler
+    stream?: GenerationStreamHandler,
+    maxTokens?: number
   ) => Promise<string>
 }
 
@@ -390,7 +391,7 @@ export const ad = (model: LoadedModel) => {
               })
               return completion + op
             } else {
-              return completion + await model.generate(op.prompt, completion, op.stop, stream)
+              return completion + await model.generate(op.prompt, completion, op.stop, stream, op.accept?.maxTokens)
             }
           }, Promise.resolve(head))
         }
