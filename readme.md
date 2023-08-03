@@ -1,6 +1,10 @@
-# Usage
-Check [example/vite-demo](./example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
+# ad-llama 🦙
 
+Use tagged template literals for structured LLaMa 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. Check [example/vite-demo](./example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
+
+https://github.com/gsuuon/ad-llama/assets/6422188/35a1316a-c491-4163-a3c7-cb8bafe74bff
+
+# Usage
 `npm install -S ad-llama`
 
 ```javascript
