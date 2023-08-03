@@ -4,6 +4,8 @@ Use tagged template literals for structured LLaMa 2 inference locally in browser
 
 https://github.com/gsuuon/ad-llama/assets/6422188/54fed226-c29b-44d6-a797-cc39a4e5a5d1
 
+Say hi in [discord](https://discord.gg/Jag2h3fS4C)!
+
 # Usage
 `npm install -S ad-llama`
 
