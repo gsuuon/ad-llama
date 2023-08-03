@@ -26,22 +26,10 @@ a:hover {
 body {
   margin: 0;
   display: flex;
+  flex-direction: column;
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-}
-
-#completion {
-  white-space: pre-wrap;
-}
-
-#completion span.gen {
-  background-color: darkgreen;
-  margin-left: 2px;
-}
-
-#progress {
-  white-space: pre-wrap;
 }
 
 h1 {
@@ -62,6 +50,19 @@ h1 {
   background-image: url('/github-mark-white.svg');
   background-size: contain;
   display: inline-block;
+}
+
+#completion {
+  white-space: pre-wrap;
+}
+
+#completion span.gen {
+  background-color: darkgreen;
+  margin-left: 2px;
+}
+
+#prompt {
+  white-space: pre-wrap;
 }
 
 .logo {
