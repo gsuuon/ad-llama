@@ -1,6 +1,6 @@
 import '../src/style.css'
 import { renderTemplate } from '../src/renderTemplate'
-import { TargetDevice, ad, guessModelSpecFromPrebuiltId, loadModel } from 'ad-llama'
+import { TargetDevice, ad, guessModelSpecFromPrebuiltId, loadModel, validate } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -18,7 +18,7 @@ const hnApiGetRandomWhosHiring = async (tries = 2) => {
 
   const text = hnListing.text
 
-  if (text === '[DEAD]' || text === '[FLAGGED]' && tries > 0) {
+  if (text === '[dead]' || text === '[flagged]' && tries > 0) {
     console.log('Got listing:', text, 'trying again..', tries)
     return await hnApiGetRandomWhosHiring(tries - 1)
   }
@@ -48,6 +48,15 @@ renderTemplate(app, async () => {
     }
   )
 
+  const asNumber = {
+    validate: {
+      retries: 3,
+      check: validate.json.num,
+      transform: (x: string) => String(Number(x))
+    },
+    stops: [' ', '\n']
+  }
+
   return template`{
   "company": {
     "name": "${a('name for the company')}",
@@ -59,20 +68,28 @@ renderTemplate(app, async () => {
     "primary": "${a('primary role')}",
     "additionalRoles": [${a('list of any additional roles mentioned', {
       stops: ["NA", "{"],
+      validate: {
+        check: validate.json.list,
+        retries: 3
+      }
     })}]
   },
   "salary": {
     "currency": "${a('currency label')}",
     "info": "${'additional info about compensation'}",
-    "max": "${a('maximum salary amount based on the listing')}",
-    "min": "${a('minimum salary amount based on the listing')}"
+    "max": ${a('maximum salary amount based on the listing', asNumber)},
+    "min": ${a('minimum salary amount based on the listing', asNumber)}
   },
   "skills": ["${a('list of skills')}],
   "remote": {
-    "allowed": ${__('Fill a javascript boolean, true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
+    "allowed": ${__('true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
       stops: ['}',' ','\n'],
+      validate: {
+        check: validate.json.bool,
+        retries: 2
+      }
     })},
-    "info": "${a('short description of their remote policy based on the listing')}"
+    "info": "${a('short description of their remote policy, based only on the given listing. If remote is not allowed, "NA" is an acceptable response.')}"
   }
 }`
 })

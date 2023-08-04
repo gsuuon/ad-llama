@@ -10,8 +10,8 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
 
   const renderPartial = (template: any) => {
     let staticPrompt = ''
-    let completionEl;
-    let promptEl;
+    let completionEl : HTMLElement | null;
+    let promptEl : HTMLElement | null;
 
     return (partial: any) => {
       if (partial.type === 'template') {
@@ -40,13 +40,20 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
         completionEl ??= document.getElementById('completion')
         promptEl ??= document.getElementById('prompt')
 
+        if (partial.type === 'ungen') {
+          for (let i = 1; i < partial.tokenCount; i++) {
+            completionEl?.lastChild?.remove()
+          }
+          return
+        }
+
         const el = document.createElement('span')
         el.textContent = partial.content
         el.className = partial.type
-        completionEl.appendChild(el)
+        completionEl?.appendChild(el)
 
         if (partial.type === 'gen') {
-          render(promptEl, `<p>${staticPrompt} ${partial.prompt}</p>`)
+          render(promptEl!, `<p>${staticPrompt} ${partial.prompt}</p>`)
         }
       }
     }
