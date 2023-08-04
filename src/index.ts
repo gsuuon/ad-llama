@@ -37,7 +37,12 @@ export const loadModel = async (
   }
 
   window.addEventListener('unhandledrejection', ev => {
-    const reason = ev.reason
+    const reason = ev.reason?.message ?? ev.reason
+
+    if (typeof(reason) === 'string' && reason.includes('Model cancelled')) {
+      return
+    }
+
     updateReport({ error: reason?.message ?? reason })
   })
 

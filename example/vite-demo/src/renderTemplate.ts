@@ -21,17 +21,18 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
           root,
           `
             <div id='prompt'><p>${staticPrompt}</p></div>
-            <pre id='completion'><code></code></pre>
-            <div id='controls'><button id='cancel'>cancel</button></div>
             <details><summary>template</summary>
               <pre><code>${partial.content}</code></pre>
             </details>
+            <pre id='completion'><code></code></pre>
+            <div id='controls'><button id='cancel'>cancel</button></div>
            `
         )
 
         const cancelButton = document.getElementById('cancel')!
         cancelButton.onclick = () => {
           template.model.cancel()
+          cancelButton.remove()
           renderRedoButton()
         }
         cancelButton.style.display = 'block'
@@ -45,7 +46,7 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
         completionEl.appendChild(el)
 
         if (partial.type === 'gen') {
-          render(promptEl, `<p>${staticPrompt}${"\nGenerate " + partial.prompt}</p>`)
+          render(promptEl, `<p>${staticPrompt} ${partial.prompt}</p>`)
         }
       }
     }
@@ -56,6 +57,7 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
   const completionResult = await template.collect(renderPartial(template))
 
   renderRedoButton()
+  document.getElementById('cancel')?.remove()
 
   console.log(completionResult)
   console.log(JSON.parse(completionResult))
