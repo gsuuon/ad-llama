@@ -37,7 +37,8 @@ export const loadModel = async (
   }
 
   window.addEventListener('unhandledrejection', ev => {
-    updateReport({ error: ev.reason })
+    const reason = ev.reason
+    updateReport({ error: reason?.message ?? reason })
   })
 
   if (cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl
