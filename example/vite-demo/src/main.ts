@@ -19,10 +19,11 @@ renderTemplate(app, async () => {
     'You are a dungeon master.',
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
+
   return template`{
-    "description": "${(a('description', {maxTokens: 1000, stops: ['\n']}))}",
+    "description": "${(a('clever description', {maxTokens: 1000, stops: ['\n']}))}",
     "name": "${(a('name'))}",
-    "weapon": "${a('weapon')}",
+    "weapon": "${a('special weapon')}",
     "items": [
       {
         "name": "${a('name')}",
