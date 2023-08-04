@@ -6,7 +6,7 @@ if (import.meta.hot) { import.meta.hot.accept() }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
-const hnApiGetRandomWhosHiring = async () => {
+const hnApiGetRandomWhosHiring = async (tries = 2) => {
   const whosHiringPostRes = await fetch('https://hacker-news.firebaseio.com/v0/item/36956867.json')
   const whosHiring = await whosHiringPostRes.json()
   const random = Math.floor(Math.random() * whosHiring.kids.length)
@@ -16,7 +16,14 @@ const hnApiGetRandomWhosHiring = async () => {
   const hnListingRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${listingId}.json`)
   const hnListing = await hnListingRes.json()
 
-  return hnListing.text
+  const text = hnListing.text
+
+  if (text === '[DEAD]' || text === '[FLAGGED]' && tries > 0) {
+    console.log('Got listing:', text, 'trying again..', tries)
+    return await hnApiGetRandomWhosHiring(tries - 1)
+  }
+
+  return text
 }
 
 renderTemplate(app, async () => {
