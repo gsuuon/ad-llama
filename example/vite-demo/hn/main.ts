@@ -40,38 +40,39 @@ renderTemplate(app, async () => {
   const listing = await hnApiGetRandomWhosHiring()
 
   const { template, a, __ } = gen(
-    'You are a helpful assistant that catalogues job listings. For any requests for which there is not sufficient information based on the listing itself, fill the field with only "NA".',
+    'You are a helpful assistant that catalogues job listings. Fill the next field in the following JSON object. For any requests for which there is not sufficient information based on the listing itself, fill the field with the string "NA".',
     `\nThe listing:\n"""\n${listing}\n"""\n`,
     {
-      preword: 'What is'
+      preword: 'What is',
+      temperature: 0.5
     }
   )
 
   return template`{
   "company": {
     "name": "${a('name for the company')}",
-    "description": "${a('description of the company and/or what it does. Fill with "NA" if no information is provided.')}",
+    "description": "${a('description for the company')}",
     "sector": "${a('sector that this company operates in')}",
     "links": ["${a('list of additional links from the listing')}]
   },
   "role": {
     "primary": "${a('primary role')}",
-    "additionalRoles": [${a('list of any additional roles mentioned, or ["NA"] if there are none', {
+    "additionalRoles": [${a('list of any additional roles mentioned', {
       stops: ["NA", "{"],
     })}]
   },
   "salary": {
     "currency": "${a('currency label')}",
-    "info": "${'any additional info about the salary if available, or NA if none'}",
-    "max": "${a('maximum salary amount based on the listing, or NA if not mentioned')}",
-    "min": "${a('minimum salary amount based on the listing, or NA if not mentioned')}"
+    "info": "${'additional info about compensation'}",
+    "max": "${a('maximum salary amount based on the listing')}",
+    "min": "${a('minimum salary amount based on the listing')}"
   },
   "skills": ["${a('list of skills')}],
   "remote": {
-    "allowed": ${__('fill a javascript boolean, true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
+    "allowed": ${__('Fill a javascript boolean, true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
       stops: ['}',' ','\n'],
     })},
-    "info": "${a('short description of their remote policy based on the listing or NA')}"
+    "info": "${a('short description of their remote policy based on the listing')}"
   }
 }`
 })
