@@ -1,6 +1,6 @@
 import '../src/style.css'
 import { renderTemplate } from '../src/renderTemplate'
-import { ad, guessModelSpecFromPrebuiltId, loadModel } from 'ad-llama'
+import { TargetDevice, ad, guessModelSpecFromPrebuiltId, loadModel } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -30,8 +30,10 @@ renderTemplate(app, async () => {
   const gen = ad(
     await loadModel(
       guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'),
-      undefined,
-      report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`
+      report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
+      new URLSearchParams(window.location.search).get('cpu') === null
+        ? TargetDevice.GPU
+        : TargetDevice.CPU 
     )
   )
 
