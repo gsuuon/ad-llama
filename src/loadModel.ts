@@ -1,4 +1,5 @@
-import * as tvmjs from 'tvmjs'
+import type { NDArray, DLDevice } from 'tvmjs'
+import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 import type {
@@ -15,16 +16,16 @@ enum ModelState {
 }
 
 const scope = (name?: string) => 'ad-llama' + name ? '/' + name : ''
-const cacheScope = (name: string) => new tvmjs.ArtifactCache(scope(name))
+const cacheScope = (name: string) => new ArtifactCache(scope(name))
 
 export default async (
   spec: ModelSpec,
   updateReport: (loadReport: LoadReport) => void,
-  targetDevice?: tvmjs.DLDevice,
+  targetDevice?: DLDevice,
 ): Promise<LoadedModel> => {
   updateReport({detectGPU: 'waiting'})
 
-  const gpu = await tvmjs.detectGPUDevice()
+  const gpu = await detectGPUDevice()
   if (gpu == undefined) {
     updateReport({detectGPU: 'failed'})
     throw Error('Cannot find GPU in environment')
@@ -46,9 +47,9 @@ export default async (
       : cacheScope('wasm').fetchWithCache(spec.modelLibWasmUrl)
   )
 
-  const tvm = await tvmjs.instantiate(
+  const tvm = await instantiate(
     new Uint8Array(await wasm.arrayBuffer()),
-    tvmjs.createPolyfillWASI()
+    createPolyfillWASI()
   )
 
   if (targetDevice === undefined) {
@@ -158,9 +159,9 @@ export default async (
     return [...prefix, ...encodedText, ...postfix]
   }
 
-  let logitsOnCpu: tvmjs.NDArray | undefined;
+  let logitsOnCpu: NDArray | undefined;
 
-  const sampleTokenFromLogits = async (logits: tvmjs.NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
+  const sampleTokenFromLogits = async (logits: NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
     tvm.beginScope()
 
     if (logitsOnCpu === undefined) {
