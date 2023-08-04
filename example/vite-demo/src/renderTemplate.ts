@@ -53,10 +53,9 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
 
   const template = await createTemplateCompletion()
 
-  renderRedoButton()
-
   const completionResult = await template.collect(renderPartial(template))
 
+  renderRedoButton()
 
   console.log(completionResult)
   console.log(JSON.parse(completionResult))
