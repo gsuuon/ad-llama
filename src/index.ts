@@ -39,8 +39,9 @@ export const loadModel = async (
   window.addEventListener('unhandledrejection', ev => {
     const reason = ev.reason?.message ?? ev.reason
 
-    if (typeof(reason) === 'string' && reason.includes('Model cancelled')) {
-      return
+    if (typeof(reason) === 'string') {
+      if (reason.includes('Model cancelled')) { return }
+      if (reason.includes('Bad control')) { return } // bad JSON parse
     }
 
     updateReport({ error: reason?.message ?? reason })
