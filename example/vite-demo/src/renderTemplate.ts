@@ -46,5 +46,4 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
 
   console.log(completionResult)
   console.log(JSON.parse(completionResult))
-  console.dir(JSON.parse(completionResult))
 }
