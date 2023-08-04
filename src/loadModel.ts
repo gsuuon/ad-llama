@@ -267,7 +267,7 @@ export default async (
     ) => {
       modelState = ModelState.Running as ModelState
 
-      const prefillText = `${system_}${preprompt_} Generate ${prompt} [/INST] ${completion}`
+      const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
       console.info({generate: {prompt, stops, context: prefillText}})
 
       if (filledKvCacheLength > 0) {
