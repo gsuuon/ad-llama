@@ -14,7 +14,8 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "rollup -c",
-    "dev": "rollup -w -c dev.config.mjs"
+    "dev": "rollup -w -c",
+    "serve": "rollup -w -c dev.config.mjs"
   },
   "author": "gsuuon@gmail.com",
   "license": "MIT",
