@@ -38,12 +38,25 @@ export type StreamPartial = {
 
 export type GenerationStreamHandler = (partial: StreamPartial) => void
 
-export type ModelGenConfig = {
-  stream?: GenerationStreamHandler,
-  maxTokens?: number,
-  temperature?: number,
+export type CommonConfig = {
+  maxTokens?: number
+  temperature?: number
   top_p?: number
 }
+
+export type ModelGenConfig = {
+  stream?: GenerationStreamHandler,
+} & CommonConfig
+
+export type AdConfig = {
+  preword?: string
+} & CommonConfig
+
+export const mergeAdModelGenConfig = (adConfig?: AdConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
+  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
+  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
+  top_p: adConfig?.top_p ?? modelGenConfig?.top_p
+})
 
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>

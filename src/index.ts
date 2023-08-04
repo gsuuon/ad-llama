@@ -4,7 +4,9 @@ import type {
   LoadReport,
   AdTemplateExpression,
   GenerationStreamHandler,
+  AdConfig,
 } from './types.js'
+import { mergeAdModelGenConfig } from './types.js'
 
 import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
@@ -87,12 +89,6 @@ type Op = string | {
   accept?: any
 }
 
-type AdConfig = {
-  preword?: string
-  temperature?: number
-  top_p?: number
-}
-
 // I think this would work better with a completion model than chat model
 export const ad = (model: LoadedModel) => {
   // TODO these are here to so that they're only available after loading a model
@@ -152,9 +148,7 @@ export const ad = (model: LoadedModel) => {
                 [op.stop, ...(op.accept?.stops ?? [])],
                 {
                   stream,
-                  maxTokens: op.accept?.maxTokens,
-                  temperature: op.accept?.temperature ?? config?.temperature,
-                  top_p: op.accept?.top_p ?? config?.top_p,
+                  ...mergeAdModelGenConfig(config, op.accept)
                 }
               )
             }
