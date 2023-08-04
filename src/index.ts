@@ -39,14 +39,12 @@ export const loadModel = async (
   }
 
   window.addEventListener('unhandledrejection', ev => {
-    const reason = ev.reason?.message ?? ev.reason
-
-    if (typeof(reason) === 'string') {
-      if (reason.includes('Model cancelled')) { return }
-      if (reason.includes('Bad control')) { return } // bad JSON parse
+    if (ev.reason instanceof Error) {
+      if (ev.reason instanceof SyntaxError) { return } // bad JSON parse
+      if (ev.reason.message.includes('Model cancelled')) { return }
     }
 
-    updateReport({ error: reason?.message ?? reason })
+    updateReport({ error: ev.reason?.message ?? ev.reason })
   })
 
   if (cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl
@@ -166,3 +164,5 @@ export const ad = (model: LoadedModel) => {
 }
 
 export { TargetDevice } from './types.js'
+
+export * as validate from './validate.js'

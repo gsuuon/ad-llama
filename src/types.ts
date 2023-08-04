@@ -23,17 +23,21 @@ export type AdTemplateExpression = {
 } | string
 
 export type StreamPartial = {
-  content: string
   type: 'lit'
-} | {
   content: string
+} | {
   type: 'gen'
+  content: string
   prompt: string
 } | {
-  type: 'template',
-  content: string,
-  system: string,
+  type: 'template'
+  content: string
+  system: string
   preprompt?: string
+} | {
+  type: 'ungen'
+  content: string
+  tokenCount: number
 }
 
 export type GenerationStreamHandler = (partial: StreamPartial) => void
@@ -44,6 +48,7 @@ export type CommonConfig = {
   top_p?: number,
   validate?: {
     check: (partial: string) => boolean,
+    transform: (partial: string) => string
     retries: number
   }
 }

@@ -252,6 +252,138 @@ export default async (
     }
   }
 
+
+  const generate = async (
+    prompt: string,
+    completion: string,
+    stops: string[],
+    config?: ModelGenConfig
+  ): Promise<string> => {
+    modelState = ModelState.Running as ModelState
+
+    const temperature = config?.temperature
+    const top_p = config?.top_p
+    const maxTokens = config?.maxTokens ?? 400
+
+    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
+    console.info({generate: {prompt, stops, context: prefillText}})
+
+    if (filledKvCacheLength > 0) {
+      unfill()
+    }
+
+    const nextToken = await prefillStep(prefillText, temperature, top_p)
+
+    if (nextToken === undefined) {
+      throw Error('Prefilled with no sampled next token')
+    }
+
+    let tokens = [nextToken]
+    let completedText = ''
+
+    const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
+      // Check each new character in next token to see if it forms the stop sequence
+      // with already completed text.
+      // This gets around the issue where our stop is `"` but the next token generates `",` which
+      // won't satisfy a straightforward endswith(stop)
+
+      for (let i = tokenDecodedText.length; i >= 0; i--) {
+        for (const stop of stops) {
+          if (text.slice(0, text.length - i).endsWith(stop)) {
+            return text.length - i - stop.length
+          }
+        }
+      }
+
+      return -1
+    }
+
+    // TODO eos token
+    while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
+      const nextToken = await decodeStep(tokens[tokens.length - 1], temperature, top_p)
+
+      tokens.push(nextToken)
+
+      const updatedText = tokenizer.decode(new Int32Array(tokens))
+
+      const tokenDecodedText = updatedText.slice(completedText.length)
+      // decoding individual tokens and combining does not produce
+      // same result as decoding seq of tokens
+
+      const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
+
+      if (stopIdx !== -1) {
+        const acceptedCompleteText = updatedText.slice(0, stopIdx)
+
+        config?.stream?.({
+          content: acceptedCompleteText.slice(completedText.length),
+          type: 'gen',
+          prompt
+        })
+
+        completedText = acceptedCompleteText
+        break
+      }
+
+      config?.stream?.({
+        content: tokenDecodedText,
+        type: 'gen',
+        prompt
+      })
+
+      completedText = updatedText
+    }
+
+    if (modelState === ModelState.Cancelling) {
+      modelState = ModelState.Waiting
+      unfill()
+      throw Error('Model cancelled')
+    }
+
+    modelState = ModelState.Waiting
+
+    if (config?.validate) {
+      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completedText)) {
+        config?.stream?.({
+          type: 'ungen',
+          tokenCount: tokens.length,
+          content: completedText
+        })
+
+        console.log({failedValidation: completedText})
+
+        return await generate(prompt, completion, stops, {
+          ...config,
+          validate: {
+            ...config.validate,
+            retries: config.validate.retries - 1,
+          }
+        })
+      }
+
+      if (config.validate.transform) {
+        // We transform even if validation fails due to exhausting retries. Should we only transform if validate succeeds?
+        config?.stream?.({
+          type: 'ungen',
+          tokenCount: tokens.length,
+          content: completedText
+        })
+
+        const transformed = config.validate.transform(completedText)
+
+        config?.stream?.({
+          type: 'gen',
+          content: transformed,
+          prompt
+        })
+
+        return transformed
+      }
+    }
+
+    return completedText
+  }
+
   const model = {
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
@@ -262,97 +394,7 @@ export default async (
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
     },
-    generate: async (
-      prompt: string,
-      completion: string,
-      stops: string[],
-      config?: ModelGenConfig
-    ) => {
-      modelState = ModelState.Running as ModelState
-
-      const temperature = config?.temperature
-      const top_p = config?.top_p
-      const maxTokens = config?.maxTokens ?? 400
-
-      const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
-      console.info({generate: {prompt, stops, context: prefillText}})
-
-      if (filledKvCacheLength > 0) {
-        unfill()
-      }
-
-      const nextToken = await prefillStep(prefillText, temperature, top_p)
-
-      if (nextToken === undefined) {
-        throw Error('Prefilled with no sampled next token')
-      }
-
-      let tokens = [nextToken]
-      let completedText = ''
-
-      const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
-        // Check each new character in next token to see if it forms the stop sequence
-        // with already completed text.
-        // This gets around the issue where our stop is `"` but the next token generates `",` which
-        // won't satisfy a straightforward endswith(stop)
-
-        for (let i = tokenDecodedText.length; i >= 0; i--) {
-          for (const stop of stops) {
-            if (text.slice(0, text.length - i).endsWith(stop)) {
-              return text.length - i - stop.length
-            }
-          }
-        }
-
-        return -1
-      }
-
-      // TODO eos token
-      while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
-        const nextToken = await decodeStep(tokens[tokens.length - 1], temperature, top_p)
-
-        tokens.push(nextToken)
-
-        const updatedText = tokenizer.decode(new Int32Array(tokens))
-
-        const tokenDecodedText = updatedText.slice(completedText.length)
-          // decoding individual tokens and combining does not produce
-          // same result as decoding seq of tokens
-
-        const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
-
-        if (stopIdx !== -1) {
-          const acceptedCompleteText = updatedText.slice(0, stopIdx)
-
-          config?.stream?.({
-            content: acceptedCompleteText.slice(completedText.length),
-            type: 'gen',
-            prompt
-          })
-
-          completedText = acceptedCompleteText
-          break
-        }
-
-        config?.stream?.({
-          content: tokenDecodedText,
-          type: 'gen',
-          prompt
-        })
-
-        completedText = updatedText
-      }
-
-      if (modelState === ModelState.Cancelling) {
-        modelState = ModelState.Waiting
-        unfill()
-        throw Error('Model cancelled')
-      }
-
-      modelState = ModelState.Waiting
-
-      return completedText
-    },
+    generate,
     cancel: async () => {
       if (modelState === ModelState.Running) {
         modelState = ModelState.Cancelling
