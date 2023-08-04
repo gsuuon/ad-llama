@@ -38,14 +38,20 @@ export type StreamPartial = {
 
 export type GenerationStreamHandler = (partial: StreamPartial) => void
 
+export type ModelGenConfig = {
+  stream?: GenerationStreamHandler,
+  maxTokens?: number,
+  temperature?: number,
+  top_p?: number
+}
+
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
   generate: (
     prompt: string,
     completion: string,
     stops: string[],
-    stream?: GenerationStreamHandler,
-    maxTokens?: number
+    config?: ModelGenConfig
   ) => Promise<string>
   cancel: () => Promise<void>
 }

@@ -89,6 +89,8 @@ type Op = string | {
 
 type AdConfig = {
   preword?: string
+  temperature?: number
+  top_p?: number
 }
 
 // I think this would work better with a completion model than chat model
@@ -148,8 +150,12 @@ export const ad = (model: LoadedModel) => {
                 op.prompt,
                 completion,
                 [op.stop, ...(op.accept?.stops ?? [])],
-                stream,
-                op.accept?.maxTokens
+                {
+                  stream,
+                  maxTokens: op.accept?.maxTokens,
+                  temperature: op.accept?.temperature ?? config?.temperature,
+                  top_p: op.accept?.top_p ?? config?.top_p,
+                }
               )
             }
           }, Promise.resolve(head))

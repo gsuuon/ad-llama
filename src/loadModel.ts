@@ -8,7 +8,7 @@ import type {
   ModelSpec,
   LoadedModel,
   LoadReport,
-  GenerationStreamHandler,
+  ModelGenConfig,
 } from './types.js'
 
 enum ModelState {
@@ -88,8 +88,8 @@ export default async (
     throw Error(err)
   }
 
-  const temperature = config.temperature ?? 1.0
-  const top_p = config.top_p ?? 0.95
+  const temperature_ = config.temperature ?? 1.0
+  const top_p_ = config.top_p ?? 0.95
 
   updateReport({ loadTokenizer: 'waiting' })
 
@@ -164,7 +164,7 @@ export default async (
 
   let logitsOnCpu: NDArray | undefined;
 
-  const sampleTokenFromLogits = async (logits: NDArray, temperature: number, top_p: number, mask?: number[]) => { // TODO mask
+  const sampleTokenFromLogits = async (logits: NDArray, temperature?: number, top_p?: number, _mask?: number[]) => { // TODO mask
     tvm.beginScope()
 
     if (logitsOnCpu === undefined) {
@@ -189,10 +189,10 @@ export default async (
 
     await device?.sync()
 
-    return tvm.sampleTopPFromLogits(logitsOnCpu, temperature, top_p)
+    return tvm.sampleTopPFromLogits(logitsOnCpu, temperature ?? temperature_, top_p ?? top_p_)
   }
 
-  const prefillStep = async (text: string) => {
+  const prefillStep = async (text: string, temperature?: number, top_p?: number) => {
     const tokens = tokenize(text)
     tvm.beginScope()
 
@@ -223,7 +223,7 @@ export default async (
     return await sampleTokenFromLogits(logits, temperature, top_p)
   }
 
-  const decodeStep = async (lastToken: number) => {
+  const decodeStep = async (lastToken: number, temperature?: number, top_p?: number) => {
     tvm.beginScope()
     const inputNdArray = tvm.empty([1, 1], 'int32', device)
     inputNdArray.copyFrom([lastToken])
@@ -266,10 +266,13 @@ export default async (
       prompt: string,
       completion: string,
       stops: string[],
-      stream?: GenerationStreamHandler,
-      maxTokens: number = 400
+      config?: ModelGenConfig
     ) => {
       modelState = ModelState.Running as ModelState
+
+      const temperature = config?.temperature
+      const top_p = config?.top_p
+      const maxTokens = config?.maxTokens ?? 400
 
       const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
       console.info({generate: {prompt, stops, context: prefillText}})
@@ -278,7 +281,7 @@ export default async (
         unfill()
       }
 
-      const nextToken = await prefillStep(prefillText)
+      const nextToken = await prefillStep(prefillText, temperature, top_p)
 
       if (nextToken === undefined) {
         throw Error('Prefilled with no sampled next token')
@@ -306,7 +309,7 @@ export default async (
 
       // TODO eos token
       while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
-        const nextToken = await decodeStep(tokens[tokens.length - 1])
+        const nextToken = await decodeStep(tokens[tokens.length - 1], temperature, top_p)
 
         tokens.push(nextToken)
 
@@ -321,7 +324,7 @@ export default async (
         if (stopIdx !== -1) {
           const acceptedCompleteText = updatedText.slice(0, stopIdx)
 
-          stream?.({
+          config?.stream?.({
             content: acceptedCompleteText.slice(completedText.length),
             type: 'gen',
             prompt
@@ -331,7 +334,7 @@ export default async (
           break
         }
 
-        stream?.({
+        config?.stream?.({
           content: tokenDecodedText,
           type: 'gen',
           prompt
