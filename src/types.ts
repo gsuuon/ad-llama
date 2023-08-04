@@ -41,7 +41,11 @@ export type GenerationStreamHandler = (partial: StreamPartial) => void
 export type CommonConfig = {
   maxTokens?: number
   temperature?: number
-  top_p?: number
+  top_p?: number,
+  validate?: {
+    check: (partial: string) => boolean,
+    retries: number
+  }
 }
 
 export type ModelGenConfig = {
@@ -55,7 +59,8 @@ export type AdConfig = {
 export const mergeAdModelGenConfig = (adConfig?: AdConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
   maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
   temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
-  top_p: adConfig?.top_p ?? modelGenConfig?.top_p
+  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
+  validate: adConfig?.validate ?? modelGenConfig?.validate
 })
 
 export type LoadedModel = {
