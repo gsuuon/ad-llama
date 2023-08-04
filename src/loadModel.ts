@@ -346,6 +346,8 @@ export default async (
         throw Error('Model cancelled')
       }
 
+      modelState = ModelState.Waiting
+
       return completedText
     },
     cancel: async () => {
