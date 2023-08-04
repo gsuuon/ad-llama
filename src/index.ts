@@ -87,13 +87,17 @@ type Op = string | {
   accept?: any
 }
 
+type AdConfig = {
+  preword?: string
+}
+
 // I think this would work better with a completion model than chat model
 export const ad = (model: LoadedModel) => {
   // TODO these are here to so that they're only available after loading a model
   // Reconsider if that design still makes sense. Maybe it'd be useful to define templates without
   // having a model yet.
   // The idea was that you could rely on intellisense alone to figure what to call to when getting started
-  return (system: string, preprompt?: string) => ({
+  return (system: string, preprompt?: string, config?: AdConfig) => ({
     template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 
@@ -154,7 +158,7 @@ export const ad = (model: LoadedModel) => {
       }
     },
     a: (prompt: string, accept?: any) => ({
-      prompt: `Generate a ${prompt}`,
+      prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
       accept,
     }),
     __: (prompt: string, accept?: any) => ({ prompt, accept, }),
