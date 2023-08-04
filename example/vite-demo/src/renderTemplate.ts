@@ -1,7 +1,14 @@
 const render = (el: HTMLElement, html: string) => el.innerHTML = html
 
 export const renderTemplate = async (root: HTMLElement, createTemplateCompletion: any) => {
-  const renderPartial = () => {
+  const renderRedoButton = () => {
+    const redoButton = document.createElement('button')
+    redoButton.onclick = () => renderTemplate(root, createTemplateCompletion)
+    redoButton.textContent = 'redo'
+    document.getElementById('controls')?.appendChild(redoButton)
+  }
+
+  const renderPartial = (template: any) => {
     let staticPrompt = ''
     let completionEl;
     let promptEl;
@@ -15,11 +22,19 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
           `
             <div id='prompt'><p>${staticPrompt}</p></div>
             <pre id='completion'><code></code></pre>
+            <div id='controls'><button id='cancel'>cancel</button></div>
             <details><summary>template</summary>
               <pre><code>${partial.content}</code></pre>
             </details>
            `
         )
+
+        const cancelButton = document.getElementById('cancel')!
+        cancelButton.onclick = () => {
+          template.model.cancel()
+          renderRedoButton()
+        }
+        cancelButton.style.display = 'block'
       } else {
         completionEl ??= document.getElementById('completion')
         promptEl ??= document.getElementById('prompt')
@@ -36,13 +51,12 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
     }
   }
 
-  const completionResult = await (await createTemplateCompletion()).collect(renderPartial())
+  const template = await createTemplateCompletion()
 
-  const button = document.createElement('button')
-  button.onclick = () => renderTemplate(root, createTemplateCompletion)
-  button.textContent = 'redo'
-  button.style.display = 'block'
-  document.getElementById('completion')?.appendChild(button)
+  renderRedoButton()
+
+  const completionResult = await template.collect(renderPartial(template))
+
 
   console.log(completionResult)
   console.log(JSON.parse(completionResult))

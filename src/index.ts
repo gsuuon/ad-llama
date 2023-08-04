@@ -35,12 +35,19 @@ type LoadReport = {
   ready?: boolean
 }
 
+enum ModelState {
+  Waiting,
+  Running,
+  Cancelling,
+}
+
 export const loadModel = async (
   spec: ModelSpec,
   targetDevice?: tvmjs.DLDevice,
   report?: (loadReport: LoadReport) => void
 ): Promise<LoadedModel> => {
   if (loadedModel?.spec.modelLibWasmUrl == spec.modelLibWasmUrl && loadedModel?.spec.modelWeightsConfigUrl == loadedModel?.spec.modelWeightsConfigUrl) {
+    await loadedModel.model.cancel()
     return loadedModel.model
   }
 
@@ -264,6 +271,7 @@ export const loadModel = async (
     return await sampleTokenFromLogits(logits, temperature, top_p)
   }
 
+  let modelState: ModelState = ModelState.Waiting
   let system_ = '<<sys>>You are a helpful assistant<</sys>>\n\n'
   let preprompt_ = '[INST]';
 
@@ -293,6 +301,8 @@ export const loadModel = async (
       stream?: GenerationStreamHandler,
       maxTokens: number = 400
     ) => {
+      modelState = ModelState.Running as ModelState
+
       const prefillText = `${system_}${preprompt_} Generate ${prompt} [/INST] ${completion}`
       console.info({generate: {prompt, stops, context: prefillText}})
 
@@ -327,7 +337,7 @@ export const loadModel = async (
       }
 
       // TODO eos token
-      while (completedText.length < maxTokens) {
+      while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
         const nextToken = await decodeStep(tokens[tokens.length - 1])
 
         tokens.push(nextToken)
@@ -362,7 +372,24 @@ export const loadModel = async (
         completedText = updatedText
       }
 
+      if (modelState === ModelState.Cancelling) {
+        modelState = ModelState.Waiting
+        unfill()
+        throw Error('Model cancelled')
+      }
+
       return completedText
+    },
+    cancel: async () => {
+      if (modelState === ModelState.Running) {
+        modelState = ModelState.Cancelling
+      }
+
+      return new Promise<void>(resolve => setInterval(() => {
+        if (modelState === ModelState.Waiting) {
+          resolve()
+        }
+      }, 16))
     }
   }
 
@@ -417,6 +444,7 @@ type LoadedModel = {
     stream?: GenerationStreamHandler,
     maxTokens?: number
   ) => Promise<string>
+  cancel: () => Promise<void>
 }
 
 // I think this would work better with a completion model than chat model
@@ -477,7 +505,8 @@ export const ad = (model: LoadedModel) => {
               )
             }
           }, Promise.resolve(head))
-        }
+        },
+        model
       }
     },
     a: (prompt: string, accept?: any) => ({
