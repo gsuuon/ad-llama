@@ -5,7 +5,8 @@ import type {
   AdTemplateExpression,
   GenerationStreamHandler,
 } from './types.js'
-import type { DLDevice } from 'tvmjs'
+
+import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
 
 // FIXME This only works for Llama-2 models because of the wasm name
@@ -16,12 +17,16 @@ export const guessModelSpecFromPrebuiltId = (id: string) => ({
 
 let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
 
+
 export const loadModel = async (
   spec: ModelSpec,
-  targetDevice?: DLDevice,
-  report?: (loadReport: LoadReport) => void
+  report?: (loadReport: LoadReport) => void,
+  targetDevice: TargetDevice = TargetDevice.GPU,
 ): Promise<LoadedModel> => {
-  let loadReport: LoadReport = { modelSpec: spec }
+  let loadReport: LoadReport = {
+    modelSpec: spec,
+    targetDevice
+  }
 
   const updateReport = (update: LoadReport) => {
     loadReport = {
@@ -30,6 +35,10 @@ export const loadModel = async (
     }
     report?.(loadReport)
   }
+
+  window.addEventListener('unhandledrejection', ev => {
+    updateReport({ error: ev.reason })
+  })
 
   if (cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl
       && cachedModelAndSpec?.spec.modelWeightsConfigUrl == cachedModelAndSpec?.spec.modelWeightsConfigUrl) {
@@ -144,3 +153,5 @@ export const ad = (model: LoadedModel) => {
     __: (prompt: string, accept?: any) => ({ prompt, accept, }),
   })
 }
+
+export { TargetDevice } from './types.js'

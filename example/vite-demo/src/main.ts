@@ -1,6 +1,6 @@
 import './style.css'
 import { renderTemplate } from './renderTemplate'
-import { ad, guessModelSpecFromPrebuiltId, loadModel } from 'ad-llama'
+import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -10,8 +10,8 @@ renderTemplate(app, async () => {
   const gen = ad(
     await loadModel(
       guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'),
-      undefined,
-      report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`
+      report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
+      TargetDevice.GPU // FIXME TargetDevice.CPU seems to be broken right now?
     )
   )
 

@@ -1,6 +1,8 @@
-import type { NDArray, DLDevice } from 'tvmjs'
+import type { NDArray } from 'tvmjs'
 import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
+
+import { TargetDevice } from './types.js'
 
 import type {
   ModelSpec,
@@ -21,19 +23,8 @@ const cacheScope = (name: string) => new ArtifactCache(scope(name))
 export default async (
   spec: ModelSpec,
   updateReport: (loadReport: LoadReport) => void,
-  targetDevice?: DLDevice,
+  targetDevice: TargetDevice,
 ): Promise<LoadedModel> => {
-  updateReport({detectGPU: 'waiting'})
-
-  const gpu = await detectGPUDevice()
-  if (gpu == undefined) {
-    updateReport({detectGPU: 'failed'})
-    throw Error('Cannot find GPU in environment')
-  }
-  updateReport({
-    detectGPU: gpu.adapterInfo.vendor,
-    loadModelConfig: 'waiting'
-  })
 
   const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
   const configResponse = await cacheScope('config').fetchWithCache(configUrl)
@@ -52,11 +43,24 @@ export default async (
     createPolyfillWASI()
   )
 
-  if (targetDevice === undefined) {
-    targetDevice = tvm.webgpu()
-  }
+  const device = targetDevice === TargetDevice.GPU ? tvm.webgpu() : tvm.cpu()
 
-  tvm.initWebGPU(gpu.device) // TODO Do I need to initWebGPU before fetchNDArrayCache? I'd prefer to defer this until later
+  if (targetDevice === TargetDevice.GPU) {
+    updateReport({detectGPU: 'waiting'})
+
+    const gpu = await detectGPUDevice()
+    if (gpu == undefined) {
+      updateReport({detectGPU: 'failed'})
+      throw Error('Cannot find GPU in environment')
+    }
+
+    updateReport({
+      detectGPU: gpu.adapterInfo.vendor,
+      loadModelConfig: 'waiting'
+    })
+
+    tvm.initWebGPU(gpu.device) 
+  }
 
   let isLoadingGpuShaders = false
 
@@ -73,8 +77,6 @@ export default async (
   })
 
   updateReport({ loadModel: 'waiting' })
-
-  const loadingModelWeights = tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, targetDevice, scope('model'))
 
   const config = await configResponse.json()
 
@@ -112,14 +114,14 @@ export default async (
 
   updateReport({ loadTokenizer: 'done' })
 
-  await loadingModelWeights
+  await tvm.fetchNDArrayCache(spec.modelWeightsConfigUrl, device, scope('model'))
 
   updateReport({ loadModel: 'done' })
 
   tvm.beginScope()
 
   const vm = tvm.detachFromCurrentScope(
-    tvm.createVirtualMachine(targetDevice)
+    tvm.createVirtualMachine(device)
   )
 
   const prefill = tvm.detachFromCurrentScope(
@@ -145,12 +147,13 @@ export default async (
 
   tvm.endScope()
 
-  updateReport({ loadGPUShaders: 'waiting' })
-  isLoadingGpuShaders = true
+  if (targetDevice === TargetDevice.GPU) {
+    updateReport({ loadGPUShaders: 'waiting' })
+    isLoadingGpuShaders = true
 
-  await tvm.asyncLoadWebGPUPiplines(vm.getInternalModule())
-
-  updateReport({ loadGPUShaders: 'done' })
+    await tvm.asyncLoadWebGPUPiplines(vm.getInternalModule())
+    updateReport({ loadGPUShaders: 'done' })
+  }
 
   const tokenize = (text: string, prefix: number[] = [], postfix: number[] = []) => {
     // TODO figure out if we've exceeded max window size and handle
@@ -184,7 +187,7 @@ export default async (
 
     tvm.endScope()
 
-    await targetDevice?.sync()
+    await device?.sync()
 
     return tvm.sampleTopPFromLogits(logitsOnCpu, temperature, top_p)
   }
@@ -193,7 +196,7 @@ export default async (
     const tokens = tokenize(text)
     tvm.beginScope()
 
-    const inputNdArray = tvm.empty([1, tokens.length], 'int32', targetDevice)
+    const inputNdArray = tvm.empty([1, tokens.length], 'int32', device)
     inputNdArray.copyFrom(tokens)
     // this is not a direct translation, not sure if the nested begin/endscopes are necessary
 
@@ -222,7 +225,7 @@ export default async (
 
   const decodeStep = async (lastToken: number) => {
     tvm.beginScope()
-    const inputNdArray = tvm.empty([1, 1], 'int32', targetDevice)
+    const inputNdArray = tvm.empty([1, 1], 'int32', device)
     inputNdArray.copyFrom([lastToken])
 
     const seqLenShape = tvm.makeShapeTuple([filledKvCacheLength + 1])

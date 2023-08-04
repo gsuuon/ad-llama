@@ -1,3 +1,8 @@
+export enum TargetDevice {
+  CPU = 'cpu',
+  GPU = 'gpu'
+}
+
 export type LoadReport = {
   loadModel?: 'waiting' | 'done'
   loadTokenizer?: 'waiting' | string | 'done'
@@ -6,6 +11,7 @@ export type LoadReport = {
   loadModelFromWeb?: number
   loadGPUShaders?: 'waiting' | number | 'done'
   detectGPU?: 'waiting' | string | 'failed'
+  targetDevice?: TargetDevice
   modelSpec?: ModelSpec
   ready?: boolean
   error?: any
