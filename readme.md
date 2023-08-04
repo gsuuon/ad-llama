@@ -23,14 +23,16 @@ const { template, a } = generator(
 const result = template`
 {
   "description": "${a('short description')}",
-    "name": "${a('character name')}",
-    "weapon": "${a('weapon')}",
-    "class": "${a('class')}"
+  "name": "${a('character name')}",
+  "weapon": "${a('weapon')}",
+  "class": "${a('class')}"
 }
 `
 
 console.log(await result.collect())
 ```
+
+For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](./example/vite-demo/hn/main.ts)
 
 ## Vite HMR
 Waiting for models to reload can be tedious, even when they're cached. ad-llama should work with vite HMR so the loaded models stay in memory. Put this in your source file to create an HMR boundary:

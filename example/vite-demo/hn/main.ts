@@ -44,7 +44,7 @@ renderTemplate(app, async () => {
     `\nThe listing:\n"""\n${listing}\n"""\n`,
     {
       preword: 'What is',
-      temperature: 0.5
+      temperature: 0.3
     }
   )
 
@@ -66,7 +66,7 @@ renderTemplate(app, async () => {
   },
   "role": {
     "primary": "${a('primary role')}",
-    "additionalRoles": [${a('list of any additional roles mentioned', {
+    "additionalRoles": [${a('list of any additional roles the listing may be hiring for', {
       stops: ["NA", "{"],
       validate: {
         check: validate.json.list,
@@ -76,9 +76,9 @@ renderTemplate(app, async () => {
   },
   "salary": {
     "currency": "${a('currency label')}",
-    "info": "${'additional info about compensation'}",
-    "max": ${a('maximum salary amount based on the listing', asNumber)},
-    "min": ${a('minimum salary amount based on the listing', asNumber)}
+    "info": "${'additional info about compensation, or "no information provided"'}",
+    "max": ${a('maximum salary amount based on the listing or 0 if no info', asNumber)},
+    "min": ${a('minimum salary amount based on the listing or 0 if no info', asNumber)}
   },
   "skills": ["${a('list of skills')}],
   "remote": {
@@ -89,10 +89,7 @@ renderTemplate(app, async () => {
         retries: 2
       }
     })},
-    "info": "${a('short description of their remote policy, based only on the given listing. If remote is not allowed, "NA" is an acceptable response.')}"
+    "info": "${__('Any additional information about remote work at the company.')}"
   }
 }`
 })
-
-
-
