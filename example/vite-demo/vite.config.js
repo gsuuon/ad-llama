@@ -6,7 +6,7 @@ export default {
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        hn: resolve(__dirname, 'src/hn/index.html'),
+        hn: resolve(__dirname, 'hn/index.html'),
       }
     }
   }
