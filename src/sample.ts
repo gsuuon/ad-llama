@@ -1,4 +1,4 @@
-import type { NDArray, Instance } from 'tvmjs'
+import { NDArray, Instance } from 'tvmjs'
 import type { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 type Selector = (logits: NDArray, tokens: number[], completion: string) => number[]
@@ -6,15 +6,15 @@ type Selector = (logits: NDArray, tokens: number[], completion: string) => numbe
 type Bias = (selector: SelectBuilder, weight: number) => Sampler
 type Gate = (selector: SelectBuilder) => Sampler
 
-type Sampler = (logits: NDArray, tokens: number[], config: any) => number
+type Sampler = (logits: NDArray, tokens: number[], completion: string, config: any) => number
 
-type SelectorData = {
+type Model = {
   vocab: string[] /// Vocab and vocab with leading whitespace (2x length of vocab)
   tvm: Instance
   tokenizer: Tokenizer
 }
 
-type SelectBuilder = (selectorData: SelectorData) => Selector
+type SelectBuilder = (model: Model) => Selector
 
 type Biases = {
   prefer: Bias
@@ -28,9 +28,9 @@ type Config = {
 }
 
 const SCRATCH_Prebuilts = {
-  number: (selectorData: SelectorData) => {
+  number: (model: Model) => {
     // TODO can V8 optimize this better with a for loop?
-    const numberToks = selectorData.vocab.reduce<number[]>((acc, chars, idx) => {
+    const numberToks = model.vocab.reduce<number[]>((acc, chars, idx) => {
       if (!isNaN(Number(chars))) {
         acc.push(idx)
       }
@@ -43,18 +43,18 @@ const SCRATCH_Prebuilts = {
     json: () => {
       const parser: any = {}
 
-      return (selectorData: SelectorData) => {
+      return (model: Model) => {
 
         return (_logits: NDArray, _tokens: number[], completion: string) => {
           let parsingTokens: number[] = []
 
-          for (let idx = 0; idx < selectorData.vocab.length; idx++) {
+          for (let idx = 0; idx < model.vocab.length; idx++) {
             // TODO actual parser api
-            parser.edit(completion + selectorData.vocab[idx])
+            parser.edit(completion + model.vocab[idx])
 
             if (parser.parse()) {
-              if (idx > selectorData.vocab.length) {
-                parsingTokens.push(idx - selectorData.vocab.length)
+              if (idx > model.vocab.length) {
+                parsingTokens.push(idx - model.vocab.length)
               } else {
                 parsingTokens.push(idx)
               }
@@ -70,35 +70,33 @@ const SCRATCH_Prebuilts = {
   }
 }
 
-const buildBiases = (model: any): Biases => {
-  const selectorData: SelectorData = {
-    vocab: model.vocab,
-    tvm: model.tvm,
-    tokenizer: model.tokenizer
-  }
+const buildBiases = (model: Model): Biases => {
+  const { tvm } = model
 
   const penalize = (selectBuilder: SelectBuilder, weight: number) => {
-    const selector = selectBuilder(selectorData)
+    const selector = selectBuilder(model)
 
-    return (logits: NDArray, tokens: number[], config: any) => {
-      const relevantTokens = selector(logits, tokens, model.completion)
+    return (logits: NDArray, tokens: number[], completion: string, config: any) => {
+      const relevantTokens = selector(logits, tokens, completion)
+      const arr = tvm.empty([relevantTokens.length, 1])
+      arr.copyFrom(relevantTokens)
 
-      model.applyRepetitionPenalty(logits, relevantTokens, weight)
-      return model.sampleNextToken(logits, config) as number
+      tvm.applyRepetitionPenalty(logits, arr, weight)
+      return tvm.sampleTopPFromLogits(logits, config.temperature, config.top_p)
     }
   }
 
   const gate = (selectBuilder: SelectBuilder, adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number) => {
-    const selector = selectBuilder(selectorData)
+    const selector = selectBuilder(model)
 
-    return (logits: NDArray, tokens: number[], config: any) => {
-      const relevantTokens = selector(logits, tokens, model.completion)
+    return (logits: NDArray, tokens: number[], completion: string, config: any) => {
+      const relevantTokens = selector(logits, tokens, completion)
 
       const modified = logits.toArray().map(adjust(relevantTokens))
 
       logits.copyFrom(new Float32Array(modified))
 
-      return model.sampleNextToken(logits, config) as number
+      return tvm.sampleTopPFromLogits(logits, config.temperature, config.top_p)
     }
   }
 
@@ -127,8 +125,8 @@ const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
 }
 
 const oneOf = (items: string[]): SelectBuilder => {
-  return (selectorData: SelectorData) => {
-    const encoded: number[][] = items.map(x => Array.from(selectorData.tokenizer.encode(x)))
+  return (model: Model) => {
+    const encoded: number[][] = items.map(x => Array.from(model.tokenizer.encode(x)))
 
     return (_logits, tokens, _completions) => {
       return encoded.filter(arrayStartsWith(tokens)).map(x => x[tokens.length] )
