@@ -1,4 +1,5 @@
 import type { NDArray, Instance } from 'tvmjs'
+import type { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 type Selector = (logits: NDArray, tokens: number[], completion: string) => number[]
 
@@ -10,6 +11,7 @@ type Sampler = (logits: NDArray, tokens: number[], config: any) => number
 type SamplerData = {
   vocab: string[] /// Vocab and vocab with leading whitespace (2x length of vocab)
   tvm: Instance
+  tokenizer: Tokenizer
 }
 
 type SelectBuilder = (samplerData: SamplerData) => Selector
@@ -112,6 +114,26 @@ const buildBiases = (model: any): Biases => {
   }
 }
 
+const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
+  for (let i = 0; i < starts.length; i++) {
+    if (starts[i] !== xs[i]) {
+      return false
+    }
+  }
+
+  return true
+}
+
+const oneOf = (items: string[]): SelectBuilder => {
+  return (samplerData: SamplerData) => {
+    const encoded: number[][] = items.map(x => Array.from(samplerData.tokenizer.encode(x)))
+
+    return (_logits, tokens, _completions) => {
+      return encoded.filter(arrayStartsWith(tokens)).map(x => x[tokens.length] )
+    }
+  }
+}
+
 export const fn = (model: any, select: Select, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
   const bias = buildBiases(model)
 
@@ -121,6 +143,9 @@ export const fn = (model: any, select: Select, prebuilts: typeof SCRATCH_Prebuil
     },
     {
       sampler: bias.accept(select(prebuilts.treesitter.json()))
+    },
+    {
+      sampler: bias.prefer(select(oneOf(['boop', 'beep'])), 100)
     }
   ]
 }
