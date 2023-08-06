@@ -8,13 +8,13 @@ type Gate = (selector: SelectBuilder) => Sampler
 
 type Sampler = (logits: NDArray, tokens: number[], config: any) => number
 
-type SamplerData = {
+type SelectorData = {
   vocab: string[] /// Vocab and vocab with leading whitespace (2x length of vocab)
   tvm: Instance
   tokenizer: Tokenizer
 }
 
-type SelectBuilder = (samplerData: SamplerData) => Selector
+type SelectBuilder = (selectorData: SelectorData) => Selector
 
 type Biases = {
   prefer: Bias
@@ -28,9 +28,9 @@ type Config = {
 }
 
 const SCRATCH_Prebuilts = {
-  number: (samplerData: SamplerData) => {
+  number: (selectorData: SelectorData) => {
     // TODO can V8 optimize this better with a for loop?
-    const numberToks = samplerData.vocab.reduce<number[]>((acc, chars, idx) => {
+    const numberToks = selectorData.vocab.reduce<number[]>((acc, chars, idx) => {
       if (!isNaN(Number(chars))) {
         acc.push(idx)
       }
@@ -43,18 +43,18 @@ const SCRATCH_Prebuilts = {
     json: () => {
       const parser: any = {}
 
-      return (samplerData: SamplerData) => {
+      return (selectorData: SelectorData) => {
 
         return (_logits: NDArray, _tokens: number[], completion: string) => {
           let parsingTokens: number[] = []
 
-          for (let idx = 0; idx < samplerData.vocab.length; idx++) {
+          for (let idx = 0; idx < selectorData.vocab.length; idx++) {
             // TODO actual parser api
-            parser.edit(completion + samplerData.vocab[idx])
+            parser.edit(completion + selectorData.vocab[idx])
 
             if (parser.parse()) {
-              if (idx > samplerData.vocab.length) {
-                parsingTokens.push(idx - samplerData.vocab.length)
+              if (idx > selectorData.vocab.length) {
+                parsingTokens.push(idx - selectorData.vocab.length)
               } else {
                 parsingTokens.push(idx)
               }
@@ -71,14 +71,14 @@ const SCRATCH_Prebuilts = {
 }
 
 const buildBiases = (model: any): Biases => {
-  const samplerData: SamplerData = {
+  const selectorData: SelectorData = {
     vocab: model.vocab,
     tvm: model.tvm,
     tokenizer: model.tokenizer
   }
 
   const penalize = (selectBuilder: SelectBuilder, weight: number) => {
-    const selector = selectBuilder(samplerData)
+    const selector = selectBuilder(selectorData)
 
     return (logits: NDArray, tokens: number[], config: any) => {
       const relevantTokens = selector(logits, tokens, model.completion)
@@ -89,7 +89,7 @@ const buildBiases = (model: any): Biases => {
   }
 
   const gate = (selectBuilder: SelectBuilder, adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number) => {
-    const selector = selectBuilder(samplerData)
+    const selector = selectBuilder(selectorData)
 
     return (logits: NDArray, tokens: number[], config: any) => {
       const relevantTokens = selector(logits, tokens, model.completion)
@@ -127,8 +127,8 @@ const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
 }
 
 const oneOf = (items: string[]): SelectBuilder => {
-  return (samplerData: SamplerData) => {
-    const encoded: number[][] = items.map(x => Array.from(samplerData.tokenizer.encode(x)))
+  return (selectorData: SelectorData) => {
+    const encoded: number[][] = items.map(x => Array.from(selectorData.tokenizer.encode(x)))
 
     return (_logits, tokens, _completions) => {
       return encoded.filter(arrayStartsWith(tokens)).map(x => x[tokens.length] )
