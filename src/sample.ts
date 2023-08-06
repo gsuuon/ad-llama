@@ -5,7 +5,7 @@ type Selector = (logits: NDArray, tokens: number[], completion: string) => numbe
 type Bias = (selector: Selector, weight: number) => Sampler
 type Gate = (selector: Selector) => Sampler
 
-type Sampler = (logits: NDArray, tokens: number[]) => number
+type Sampler = (logits: NDArray, tokens: number[], config: any) => number
 
 type SamplerData = {
   vocab: string[] /// Vocab and vocab with leading whitespace (2x length of vocab)
@@ -69,7 +69,52 @@ const SCRATCH_Prebuilts = {
   }
 }
 
-export const fn = (bias: Biases, select: Select, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
+const buildBiases = (model: any): Biases => {
+  return {
+    prefer: (selector: Selector, weight: number): Sampler => {
+      return (logits: NDArray, tokens: number[], config: any) => {
+        const relevantTokens = selector(logits, tokens, model.completion)
+
+        model.applyRepetitionPenalty(logits, relevantTokens, 1/weight)
+        return model.sampleNextToken(logits, config) as number
+      }
+    },
+    avoid: (selector: Selector, weight: number): Sampler => {
+      return (logits: NDArray, tokens: number[], config: any) => {
+        const relevantTokens = selector(logits, tokens, model.completion)
+
+        model.applyRepetitionPenalty(logits, relevantTokens, weight)
+        return model.sampleNextToken(logits, config) as number
+      }
+    },
+    accept: (selector: Selector): Sampler => {
+      return (logits: NDArray, tokens: number[], config: any) => {
+        const relevantTokens = selector(logits, tokens, model.completion)
+
+        const modified = logits.toArray().map((logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY)
+
+        logits.copyFrom(new Float32Array(modified))
+
+        return model.sampleNextToken(logits, config) as number
+      }
+    },
+    reject: (selector: Selector): Sampler => {
+      return (logits: NDArray, tokens: number[], config: any) => {
+        const relevantTokens = selector(logits, tokens, model.completion)
+
+        const modified = logits.toArray().map((logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit)
+
+        logits.copyFrom(new Float32Array(modified))
+
+        return model.sampleNextToken(logits, config) as number
+      }
+    }
+  }
+}
+
+export const fn = (model: any, select: Select, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
+  const bias = buildBiases(model)
+
   return [
     {
       sampler: bias.prefer(select(prebuilts.number), 100)
