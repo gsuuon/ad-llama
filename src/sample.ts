@@ -114,6 +114,16 @@ const buildBiases = (model: any): Biases => {
   }
 }
 
+const buildSelect = (model: any): Select => {
+  const samplerData: SamplerData = {
+    vocab: model.vocab,
+    tvm: model.tvm,
+    tokenizer: model.tokenizer
+  }
+
+  return selectBuilder => selectBuilder(samplerData)
+}
+
 const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
   for (let i = 0; i < starts.length; i++) {
     if (starts[i] !== xs[i]) {
@@ -134,8 +144,9 @@ const oneOf = (items: string[]): SelectBuilder => {
   }
 }
 
-export const fn = (model: any, select: Select, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
+export const fn = (model: any, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
   const bias = buildBiases(model)
+  const select = buildSelect(model)
 
   return [
     {
