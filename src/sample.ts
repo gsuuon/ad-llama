@@ -3,8 +3,8 @@ import type { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 type Selector = (logits: NDArray, tokens: number[], completion: string) => number[]
 
-type Bias = (selector: Selector, weight: number) => Sampler
-type Gate = (selector: Selector) => Sampler
+type Bias = (selector: SelectBuilder, weight: number) => Sampler
+type Gate = (selector: SelectBuilder) => Sampler
 
 type Sampler = (logits: NDArray, tokens: number[], config: any) => number
 
@@ -15,7 +15,6 @@ type SamplerData = {
 }
 
 type SelectBuilder = (samplerData: SamplerData) => Selector
-type Select = (selectBuilder: SelectBuilder) => Selector
 
 type Biases = {
   prefer: Bias
@@ -72,56 +71,49 @@ const SCRATCH_Prebuilts = {
 }
 
 const buildBiases = (model: any): Biases => {
-  return {
-    prefer: (selector: Selector, weight: number): Sampler => {
-      return (logits: NDArray, tokens: number[], config: any) => {
-        const relevantTokens = selector(logits, tokens, model.completion)
-
-        model.applyRepetitionPenalty(logits, relevantTokens, 1/weight)
-        return model.sampleNextToken(logits, config) as number
-      }
-    },
-    avoid: (selector: Selector, weight: number): Sampler => {
-      return (logits: NDArray, tokens: number[], config: any) => {
-        const relevantTokens = selector(logits, tokens, model.completion)
-
-        model.applyRepetitionPenalty(logits, relevantTokens, weight)
-        return model.sampleNextToken(logits, config) as number
-      }
-    },
-    accept: (selector: Selector): Sampler => {
-      return (logits: NDArray, tokens: number[], config: any) => {
-        const relevantTokens = selector(logits, tokens, model.completion)
-
-        const modified = logits.toArray().map((logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY)
-
-        logits.copyFrom(new Float32Array(modified))
-
-        return model.sampleNextToken(logits, config) as number
-      }
-    },
-    reject: (selector: Selector): Sampler => {
-      return (logits: NDArray, tokens: number[], config: any) => {
-        const relevantTokens = selector(logits, tokens, model.completion)
-
-        const modified = logits.toArray().map((logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit)
-
-        logits.copyFrom(new Float32Array(modified))
-
-        return model.sampleNextToken(logits, config) as number
-      }
-    }
-  }
-}
-
-const buildSelect = (model: any): Select => {
   const samplerData: SamplerData = {
     vocab: model.vocab,
     tvm: model.tvm,
     tokenizer: model.tokenizer
   }
 
-  return selectBuilder => selectBuilder(samplerData)
+  const penalize = (selectBuilder: SelectBuilder, weight: number) => {
+    const selector = selectBuilder(samplerData)
+
+    return (logits: NDArray, tokens: number[], config: any) => {
+      const relevantTokens = selector(logits, tokens, model.completion)
+
+      model.applyRepetitionPenalty(logits, relevantTokens, weight)
+      return model.sampleNextToken(logits, config) as number
+    }
+  }
+
+  const gate = (selectBuilder: SelectBuilder, adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number) => {
+    const selector = selectBuilder(samplerData)
+
+    return (logits: NDArray, tokens: number[], config: any) => {
+      const relevantTokens = selector(logits, tokens, model.completion)
+
+      const modified = logits.toArray().map(adjust(relevantTokens))
+
+      logits.copyFrom(new Float32Array(modified))
+
+      return model.sampleNextToken(logits, config) as number
+    }
+  }
+
+  return {
+    prefer: (selectBuilder: SelectBuilder, weight: number): Sampler => penalize(selectBuilder, 1/weight),
+    avoid: (selectBuilder: SelectBuilder, weight: number): Sampler => penalize(selectBuilder, weight),
+    accept: (selectBuilder: SelectBuilder): Sampler => gate(
+      selectBuilder,
+      (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY
+    ),
+    reject: (selectBuilder: SelectBuilder): Sampler => gate(
+      selectBuilder,
+      (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit
+    )
+  }
 }
 
 const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
@@ -146,17 +138,16 @@ const oneOf = (items: string[]): SelectBuilder => {
 
 export const fn = (model: any, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
   const bias = buildBiases(model)
-  const select = buildSelect(model)
 
   return [
     {
-      sampler: bias.prefer(select(prebuilts.number), 100)
+      sampler: bias.prefer(prebuilts.number, 100)
     },
     {
-      sampler: bias.accept(select(prebuilts.treesitter.json()))
+      sampler: bias.accept(prebuilts.treesitter.json())
     },
     {
-      sampler: bias.prefer(select(oneOf(['boop', 'beep'])), 100)
+      sampler: bias.prefer(oneOf(['boop', 'beep']), 100)
     }
   ]
 }
