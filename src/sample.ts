@@ -4,7 +4,7 @@ import type { Tokenizer } from '@mlc-ai/web-tokenizers'
 type Selector = (logits: NDArray, tokens: number[], completion: string) => number[]
 
 type Bias = (selector: SelectBuilder, weight: number) => Sampler
-type Gate = (selector: SelectBuilder) => Sampler
+type Mask = (selector: SelectBuilder) => Sampler
 
 type Sampler = (logits: NDArray, tokens: number[], completion: string, config: any) => number
 
@@ -19,8 +19,8 @@ type SelectBuilder = (model: Model) => Selector
 type Biases = {
   prefer: Bias
   avoid: Bias
-  accept: Gate
-  reject: Gate
+  accept: Mask
+  reject: Mask
 }
 
 type Config = {
@@ -86,7 +86,7 @@ const buildBiases = (model: Model): Biases => {
     }
   }
 
-  const gate = (selectBuilder: SelectBuilder, adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number) => {
+  const mask = (selectBuilder: SelectBuilder, adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number) => {
     const selector = selectBuilder(model)
 
     return (logits: NDArray, tokens: number[], completion: string, config: any) => {
@@ -101,13 +101,13 @@ const buildBiases = (model: Model): Biases => {
   }
 
   return {
-    prefer: (selectBuilder: SelectBuilder, weight: number): Sampler => penalize(selectBuilder, 1/weight),
-    avoid: (selectBuilder: SelectBuilder, weight: number): Sampler => penalize(selectBuilder, weight),
-    accept: (selectBuilder: SelectBuilder): Sampler => gate(
+    prefer: (selectBuilder, weight) => penalize(selectBuilder, 1/weight),
+    avoid: (selectBuilder, weight) => penalize(selectBuilder, weight),
+    accept: selectBuilder => mask(
       selectBuilder,
       (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY
     ),
-    reject: (selectBuilder: SelectBuilder): Sampler => gate(
+    reject: selectBuilder => mask(
       selectBuilder,
       (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit
     )
