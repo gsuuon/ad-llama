@@ -64,13 +64,6 @@ export type AdConfig = {
   preword?: string
 } & CommonConfig
 
-export const mergeAdModelGenConfig = (adConfig?: AdConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
-  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
-  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
-  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
-  validate: adConfig?.validate ?? modelGenConfig?.validate
-})
-
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
   generate: (

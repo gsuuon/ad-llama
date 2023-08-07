@@ -1,12 +1,13 @@
 import type {
   ModelSpec,
+  ModelGenConfig,
+  CommonConfig,
   LoadedModel,
   LoadReport,
   AdTemplateExpression,
   GenerationStreamHandler,
   AdConfig,
 } from './types.js'
-import { mergeAdModelGenConfig } from './types.js'
 
 import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
@@ -86,6 +87,15 @@ type Op = string | {
   stop: string
   accept?: any
 }
+
+
+const mergeAdModelGenConfig = (adConfig?: AdConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
+  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
+  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
+  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
+  validate: adConfig?.validate ?? modelGenConfig?.validate,
+  sampler: adConfig?.sampler ?? modelGenConfig?.sampler
+})
 
 // I think this would work better with a completion model than chat model
 export const ad = (model: LoadedModel) => {
