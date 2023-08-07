@@ -8,15 +8,14 @@ type Mask = (selector: SelectBuilder) => Sampler
 
 type Sampler = (logits: NDArray, tokens: number[], completion: string, config: any) => number
 
-type Model = {
-  vocab: string[] /// Vocab and vocab with leading whitespace (2x length of vocab)
+export type Model = {
   tvm: Instance
   tokenizer: Tokenizer
 }
 
 type SelectBuilder = (model: Model) => Selector
 
-type Biases = {
+export type Biases = {
   prefer: Bias
   avoid: Bias
   accept: Mask
@@ -27,50 +26,8 @@ type Config = {
   sampler: Sampler
 }
 
-const SCRATCH_Prebuilts = {
-  number: (model: Model) => {
-    // TODO can V8 optimize this better with a for loop?
-    const numberToks = model.vocab.reduce<number[]>((acc, chars, idx) => {
-      if (!isNaN(Number(chars))) {
-        acc.push(idx)
-      }
-      return acc
-    }, [])
 
-    return () => numberToks
-  },
-  treesitter: {
-    json: () => {
-      const parser: any = {}
-
-      return (model: Model) => {
-
-        return (_logits: NDArray, _tokens: number[], completion: string) => {
-          let parsingTokens: number[] = []
-
-          for (let idx = 0; idx < model.vocab.length; idx++) {
-            // TODO actual parser api
-            parser.edit(completion + model.vocab[idx])
-
-            if (parser.parse()) {
-              if (idx > model.vocab.length) {
-                parsingTokens.push(idx - model.vocab.length)
-              } else {
-                parsingTokens.push(idx)
-              }
-            }
-
-            parser.edit(completion)
-          }
-
-          return parsingTokens
-        }
-      }
-    }
-  }
-}
-
-const buildBiases = (model: Model): Biases => {
+export const buildBiases = (model: Model): Biases => {
   const { tvm } = model
 
   const penalize = (selectBuilder: SelectBuilder, weight: number) => {
@@ -92,9 +49,12 @@ const buildBiases = (model: Model): Biases => {
     return (logits: NDArray, tokens: number[], completion: string, config: any) => {
       const relevantTokens = selector(logits, tokens, completion)
 
+      const start = performance.now()
       const modified = logits.toArray().map(adjust(relevantTokens))
 
       logits.copyFrom(new Float32Array(modified))
+
+      console.log({ maskPerf: performance.now() - start })
 
       return tvm.sampleTopPFromLogits(logits, config.temperature, config.top_p)
     }
@@ -114,7 +74,7 @@ const buildBiases = (model: Model): Biases => {
   }
 }
 
-const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
+export const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
   for (let i = 0; i < starts.length; i++) {
     if (starts[i] !== xs[i]) {
       return false
@@ -124,7 +84,7 @@ const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
   return true
 }
 
-const oneOf = (items: string[]): SelectBuilder => {
+export const oneOf = (items: string[]): SelectBuilder => {
   return (model: Model) => {
     const encoded: number[][] = items.map(x => Array.from(model.tokenizer.encode(x)))
 
@@ -134,15 +94,17 @@ const oneOf = (items: string[]): SelectBuilder => {
   }
 }
 
-export const fn = (model: any, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
+const SCRATCH_Prebuilts = {
+  number: oneOf(['0','1','2','3','4','5','6', '7', '8', '9',',','.'])
+    // NOTE this encourages single char tokens which may result in less expected inferred text
+}
+
+export const fn = (model: Model, prebuilts: typeof SCRATCH_Prebuilts): Config[] => {
   const bias = buildBiases(model)
 
   return [
     {
-      sampler: bias.prefer(prebuilts.number, 100)
-    },
-    {
-      sampler: bias.accept(prebuilts.treesitter.json())
+      sampler: bias.accept(prebuilts.number)
     },
     {
       sampler: bias.prefer(oneOf(['boop', 'beep']), 100)
