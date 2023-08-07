@@ -182,12 +182,7 @@ export default async (
     }
 
     logitsOnCpu.copyFrom(logits)
-    logits.dispose() // not sure if logits is at the right scope to be disposed from here
-
-    // we skip a new begin/end scope here, check https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L317
-    // if things break
-    // TODO mask
-    // we change the logits on cpu before doing sample
+    logits.dispose()
 
     tvm.endScope()
 
@@ -252,35 +247,42 @@ export default async (
     }
   }
 
-  const model: Model = { tvm, tokenizer }
 
   const generate = async (
     prompt: string,
-    completion: string,
+    priorCompletion: string,
     stops: string[],
     config?: ModelGenConfig
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
 
+    let tokens: number[] = []
+    let completion = ''
+
+    const configSampler = config?.sampler
+    const sample =
+      configSampler
+      ? (logits: NDArray) => configSampler(logits, tokens, completion, { temperature, top_p })
+      : (logits: NDArray) => sampleTokenFromLogits(logits, temperature, top_p)
+
     const temperature = config?.temperature
     const top_p = config?.top_p
     const maxTokens = config?.maxTokens ?? 400
 
-    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
+    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
     console.info({generate: {prompt, stops, context: prefillText}})
 
     if (filledKvCacheLength > 0) {
       unfill()
     }
 
-    const nextToken = await sampleTokenFromLogits(prefillStep(prefillText), temperature, top_p)
+    const nextToken = await sample(prefillStep(prefillText))
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
     }
 
-    let tokens = [nextToken]
-    let completedText = ''
+    tokens.push(nextToken)
 
     const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
       // Check each new character in next token to see if it forms the stop sequence
@@ -300,14 +302,14 @@ export default async (
     }
 
     // TODO eos token
-    while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
-      const nextToken = await sampleTokenFromLogits(decodeStep(tokens[tokens.length - 1]), temperature, top_p)
+    while (!(modelState === ModelState.Cancelling) && completion.length < maxTokens) {
+      const nextToken = await sample(decodeStep(tokens[tokens.length - 1]))
 
       tokens.push(nextToken)
 
       const updatedText = tokenizer.decode(new Int32Array(tokens))
 
-      const tokenDecodedText = updatedText.slice(completedText.length)
+      const tokenDecodedText = updatedText.slice(completion.length)
       // decoding individual tokens and combining does not produce
       // same result as decoding seq of tokens
 
@@ -317,12 +319,12 @@ export default async (
         const acceptedCompleteText = updatedText.slice(0, stopIdx)
 
         config?.stream?.({
-          content: acceptedCompleteText.slice(completedText.length),
+          content: acceptedCompleteText.slice(completion.length),
           type: 'gen',
           prompt
         })
 
-        completedText = acceptedCompleteText
+        completion = acceptedCompleteText
         break
       }
 
@@ -332,7 +334,7 @@ export default async (
         prompt
       })
 
-      completedText = updatedText
+      completion = updatedText
     }
 
     if (modelState === ModelState.Cancelling) {
@@ -344,16 +346,16 @@ export default async (
     modelState = ModelState.Waiting
 
     if (config?.validate) {
-      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completedText)) {
+      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completion)) {
         config?.stream?.({
           type: 'ungen',
           tokenCount: tokens.length,
-          content: completedText
+          content: completion
         })
 
-        console.log({failedValidation: completedText})
+        console.log({failedValidation: completion})
 
-        return await generate(prompt, completion, stops, {
+        return await generate(prompt, priorCompletion, stops, {
           ...config,
           validate: {
             ...config.validate,
@@ -367,10 +369,10 @@ export default async (
         config?.stream?.({
           type: 'ungen',
           tokenCount: tokens.length,
-          content: completedText
+          content: completion
         })
 
-        const transformed = config.validate.transform(completedText)
+        const transformed = config.validate.transform(completion)
 
         config?.stream?.({
           type: 'gen',
@@ -382,10 +384,14 @@ export default async (
       }
     }
 
-    return completedText
+    return completion
   }
 
+  const biases = buildBiases({ tvm, tokenizer })
+
   const loadedModel = {
+    generate,
+    biases,
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
       preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
@@ -397,7 +403,6 @@ export default async (
       // This only saves prefilling the system + preprompt anyway - it won't do anything for generates since the generate prompt
       // goes before the completion body
     },
-    generate,
     cancel: async () => {
       if (modelState === ModelState.Running) {
         modelState = ModelState.Cancelling
