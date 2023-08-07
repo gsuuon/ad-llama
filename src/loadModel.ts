@@ -3,6 +3,9 @@ import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
 import { TargetDevice } from './types.js'
+import type { Model, Biases } from './sample.js'
+import { buildBiases } from './sample.js'
+
 
 import type {
   ModelSpec,
@@ -97,6 +100,7 @@ export default async (
     'tokenizer.model': Tokenizer.fromSentencePiece,
     'tokenizer.json': Tokenizer.fromJSON
   }).find(([file, _create]) => config.tokenizer_files.includes(file))
+    // preference comes from the order of tokenizer_files -- seems like .json is preferred over .model
 
   if (configTokenizerFiles == undefined) {
     const err = `Cant handle tokenizer files ${config.tokenizer_files}`;
@@ -164,7 +168,7 @@ export default async (
 
   let logitsOnCpu: NDArray | undefined;
 
-  const sampleTokenFromLogits = async (logits: NDArray, temperature?: number, top_p?: number, _mask?: number[]) => { // TODO mask
+  const sampleTokenFromLogits = async (logits: NDArray, temperature?: number, top_p?: number) => { // TODO mask
     tvm.beginScope()
 
     if (logitsOnCpu === undefined) {
@@ -192,51 +196,47 @@ export default async (
     return tvm.sampleTopPFromLogits(logitsOnCpu, temperature ?? temperature_, top_p ?? top_p_)
   }
 
-  const prefillStep = async (text: string, temperature?: number, top_p?: number) => {
+  const prefillStep = (text: string): NDArray => {
     const tokens = tokenize(text)
     tvm.beginScope()
 
     const inputNdArray = tvm.empty([1, tokens.length], 'int32', device)
     inputNdArray.copyFrom(tokens)
-    // this is not a direct translation, not sure if the nested begin/endscopes are necessary
 
-    // TODO curpos param
-    // https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L269
-    const seqLenShape = tvm.makeShapeTuple([tokens.length]) 
-    // NOTE llm_chat.ts conflates forward/decode here into a single forward function that handles both
-    // i'm avoiding that, but if things break here check what's different
-
-    const retValue = prefill(inputNdArray, seqLenShape, kvCache, params)
-    // TODO is prefill stateful?
+    const retValue = prefill(
+      inputNdArray,
+      tvm.makeShapeTuple([tokens.length]),
+      kvCache,
+      params
+    )
 
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
-    // skipping the endscope -> attachtocurrentscope because we're still in same scope here
-
-    // TODO track seqlen, kv cache
-    // it looks like filledkvcachelength is to set curpos for some steps (decode vs prefill)?
     tvm.endScope()
 
-    // tvm.attachToCurrentScope(logits) // can I use unattached logits in sampleTokenFromLogits?
+    filledKvCacheLength += tokens.length
 
-    filledKvCacheLength += tokens.length // not sure if this is supposed to only increment after decoding?
-
-    return await sampleTokenFromLogits(logits, temperature, top_p)
+    return logits
   }
 
-  const decodeStep = async (lastToken: number, temperature?: number, top_p?: number) => {
+  const decodeStep = (lastToken: number): NDArray => {
     tvm.beginScope()
+
     const inputNdArray = tvm.empty([1, 1], 'int32', device)
     inputNdArray.copyFrom([lastToken])
 
-    const seqLenShape = tvm.makeShapeTuple([filledKvCacheLength + 1])
-    const retValue = decode(inputNdArray, seqLenShape, kvCache, params)
+    const retValue = decode(
+      inputNdArray,
+      tvm.makeShapeTuple([filledKvCacheLength + 1]),
+      kvCache,
+      params
+    )
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
 
     tvm.endScope()
 
     filledKvCacheLength += 1
 
-    return await sampleTokenFromLogits(logits, temperature, top_p)
+    return logits
   }
 
   let modelState: ModelState = ModelState.Waiting
@@ -252,6 +252,7 @@ export default async (
     }
   }
 
+  const model: Model = { tvm, tokenizer }
 
   const generate = async (
     prompt: string,
@@ -272,7 +273,7 @@ export default async (
       unfill()
     }
 
-    const nextToken = await prefillStep(prefillText, temperature, top_p)
+    const nextToken = await sampleTokenFromLogits(prefillStep(prefillText), temperature, top_p)
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
@@ -300,7 +301,7 @@ export default async (
 
     // TODO eos token
     while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
-      const nextToken = await decodeStep(tokens[tokens.length - 1], temperature, top_p)
+      const nextToken = await sampleTokenFromLogits(decodeStep(tokens[tokens.length - 1]), temperature, top_p)
 
       tokens.push(nextToken)
 
@@ -384,7 +385,7 @@ export default async (
     return completedText
   }
 
-  const model = {
+  const loadedModel = {
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
       preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
@@ -393,6 +394,8 @@ export default async (
 
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
+      // This only saves prefilling the system + preprompt anyway - it won't do anything for generates since the generate prompt
+      // goes before the completion body
     },
     generate,
     cancel: async () => {
@@ -410,7 +413,7 @@ export default async (
 
   updateReport({ ready: true })
 
-  return model
+  return loadedModel
 }
 
 
