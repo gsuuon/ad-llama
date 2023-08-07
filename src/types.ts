@@ -1,3 +1,5 @@
+import type { Sampler } from './sample.js'
+
 export enum TargetDevice {
   CPU = 'cpu',
   GPU = 'gpu'
@@ -45,16 +47,17 @@ export type GenerationStreamHandler = (partial: StreamPartial) => void
 export type CommonConfig = {
   maxTokens?: number
   temperature?: number
-  top_p?: number,
+  top_p?: number
   validate?: {
-    check: (partial: string) => boolean,
+    check: (partial: string) => boolean
     transform: (partial: string) => string
     retries: number
   }
+  sampler?: Sampler
 }
 
 export type ModelGenConfig = {
-  stream?: GenerationStreamHandler,
+  stream?: GenerationStreamHandler
 } & CommonConfig
 
 export type AdConfig = {

@@ -6,7 +6,7 @@ type Selector = (logits: NDArray, tokens: number[], completion: string) => numbe
 type Bias = (selector: SelectBuilder, weight: number) => Sampler
 type Mask = (selector: SelectBuilder) => Sampler
 
-type Sampler = (logits: NDArray, tokens: number[], completion: string, config: any) => number
+export type Sampler = (logits: NDArray, tokens: number[], completion: string, config: any) => number
 
 export type Model = {
   tvm: Instance
