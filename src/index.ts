@@ -176,5 +176,4 @@ export const ad = (model: LoadedModel) => {
 export { TargetDevice } from './types.js'
 
 export * as validate from './validate.js'
-
-export { chars, oneOf } from './sample.js'
+export * as sample from './sample.js'

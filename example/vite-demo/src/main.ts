@@ -1,6 +1,6 @@
 import './style.css'
 import { renderTemplate } from './renderTemplate'
-import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice, chars, oneOf } from 'ad-llama'
+import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice, sample } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -26,20 +26,25 @@ renderTemplate(app, async () => {
   )
 
   const { bias } = model
+  const { oneOf, consistsOf, chars } = sample
 
   return template`{
-  "class": "${a('class', {
+  "class": "${a('primary class for the character', {
     sampler: bias.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
   })}",
   "subclass": "${a('subclass')}",
-  "name": "${(a('name'))}",
-  "weapon": "${a('special weapon', {
-    sampler: bias.prefer(oneOf(['nun-chucks', 'beam cannon']), 10)
-  })}",
-  "description": "${(a('clever description', {maxTokens: 1000, stops: ['\n']}))}",
+  "name": "${(a('name', { sampler: bias.avoid(oneOf(['Eira', 'Zorvath', 'Kaelith']), 1.5) }))}",
+  "weapon": "${a('special weapon', { sampler: bias.prefer(oneOf(['Nun-chucks', 'Beam Cannon']), 10) })}",
+  "description": "${(a('clever description', {
+    maxTokens: 1000,
+    stops: ['\n'],
+    sampler: bias.avoid(consistsOf(['\n']), 1.3)
+  }))}",
   "age": ${a('age', {
     sampler: bias.accept(chars.number),
-    maxTokens: 4,
+    maxTokens: 3,
+    temperature: 1.01,
+    top_p: 0.99
   })},
   "items": [
     {
