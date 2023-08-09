@@ -7,7 +7,6 @@ import type { DeviceNDArray, CpuNDArray } from './sample.js'
 import { TargetDevice } from './types.js'
 import { buildBias } from './sample.js'
 
-
 import type {
   ModelSpec,
   LoadedModel,
@@ -29,11 +28,12 @@ export default async (
   updateReport: (loadReport: LoadReport) => void,
   targetDevice: TargetDevice,
 ): Promise<LoadedModel> => {
+
+  updateReport({ loadModelConfig: 'waiting' })
+
   const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
   const configResponse = await cacheScope('config').fetchWithCache(configUrl)
   // TODO ArtifactCache error is probably too cryptic if configurl is invalid
-
-  updateReport({ loadModelConfig: 'done' })
 
   const wasm = await (
     spec.modelLibWasmUrl.includes('localhost') // never cache localhost
@@ -57,10 +57,7 @@ export default async (
       throw Error('Cannot find GPU in environment')
     }
 
-    updateReport({
-      detectGPU: gpu.adapterInfo.vendor,
-      loadModelConfig: 'waiting'
-    })
+    updateReport({ detectGPU: gpu.adapterInfo.vendor })
 
     tvm.initWebGPU(gpu.device) 
   }
@@ -91,7 +88,10 @@ export default async (
     throw Error(err)
   }
 
-  updateReport({ loadTokenizer: 'waiting' })
+  updateReport({
+    loadTokenizer: 'waiting',
+    loadModelConfig: 'done'
+  })
 
   const configTokenizerFiles = Object.entries({
     'tokenizer.model': Tokenizer.fromSentencePiece,
@@ -408,7 +408,9 @@ export default async (
 
   const bias = buildBias({ tvm, tokenizer, sample: sampleTokenFromLogits })
 
-  const loadedModel = {
+  updateReport({ ready: true })
+
+  return {
     generate,
     bias,
     setContext: async (system: string, preprompt?: string) => {
@@ -434,10 +436,6 @@ export default async (
       }, 16))
     }
   }
-
-  updateReport({ ready: true })
-
-  return loadedModel
 }
 
 
