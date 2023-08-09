@@ -1,6 +1,5 @@
 import { NDArray, Instance } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
-import { AdExprConfig } from './types.js'
 
 export type DeviceNDArray = {
   host: 'dev'
@@ -13,7 +12,7 @@ export type CpuNDArray = {
 }
 
 /**
- * Select relevant tokens -- called once for each sampling
+ * Select relevant tokens -- called once for each token generation
  */
 type SamplerSelector = (cpuLogits: CpuNDArray, tokens: number[], completion: string) => number[]
   // NOTE that since we return relevant tokens as an array, duplicates will have their bias applied twice (no change with gates)
@@ -25,7 +24,7 @@ type SamplerSelector = (cpuLogits: CpuNDArray, tokens: number[], completion: str
 type SamplerSelectBuilder = (priorCompletion: string) => SamplerSelector
 
 /**
- * Build the sampler for the model -- called once per template
+ * Build the sampler given a model -- called once per template
  */
 type SamplerTemplateBuilder = (model: Model) => SamplerSelectBuilder
 
@@ -35,11 +34,10 @@ type Mask = (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
 export type Sampler = (
   cpuLogits: CpuNDArray,
   tokens: number[],
-  completion: string,
-  config: any
-) => Promise<number>
+  completion: string
+) => number
 
-type SamplerBuilder = (
+export type SamplerBuilder = (
   priorCompletion: string,
   temperature: number,
   top_p: number
@@ -48,40 +46,26 @@ type SamplerBuilder = (
 export type Model = {
   tvm: Instance
   tokenizer: Tokenizer
-  sample: (logits: CpuNDArray, temperature: number, top_p: number) => Promise<number>
+  sample: (logits: CpuNDArray, temperature: number, top_p: number) => number
 }
 
 export type Biases = {
   prefer: Bias
   avoid: Bias
-  // current implementation of avoid will likely not produce what we're looking for.
-  // 1. there are always multiple token sequences which produce a string of characters, to alleviate we can:
-  //   a. at selector, decode the current (entire) completion + relevant sequences
-  //     * more performant
-  //   b. at selector, decode entire voculary and check if it matches the provided xs (in case of oneOf)
-  //     * more accurate
-  //   c. at selector, decode relevant strings and whitespace prefix variants of those strings
-  //     * most performant, least accurate
-  // 2. avoid is case sensitive. not a problem with prefer, since we are driving towards specific tokens, not away from strings
-  //   * if we have class: bias.avoid(oneOf(['ranger', 'cleric'])) we can still get 'Ranger' or 'Cleric'
   accept: Mask
   reject: Mask
-}
-
-type Config = {
-  sampler: SamplerBuilder
 }
 
 export const buildBiases = (model: Model): Biases => {
   const { tvm, sample } = model
 
-  const penalize = (buildModelSampler: SamplerTemplateBuilder, weight: number): SamplerBuilder => {
-    const buildSelector = buildModelSampler(model)
+  const penalize = (buildTemplateSampler: SamplerTemplateBuilder, weight: number): SamplerBuilder => {
+    const buildSelector = buildTemplateSampler(model)
 
     return (priorCompletion: string, temperature: number, top_p: number): Sampler => {
       const selector = buildSelector(priorCompletion)
 
-      return async (cpuLogits, tokens, completion) => {
+      return (cpuLogits, tokens, completion) => {
         const logits = cpuLogits.data
 
         const relevantTokens = selector(cpuLogits, tokens, completion)
@@ -97,48 +81,52 @@ export const buildBiases = (model: Model): Biases => {
           tvm.endScope()
         }
 
-        return await sample(cpuLogits, temperature, top_p)
+        return sample(cpuLogits, temperature, top_p)
       }
     }
   }
 
-  // const mask = (
-  //   selectBuilder: SelectBuilder,
-  //   adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number
-  // ): SamplerBuilder => {
-  //   const selector = selectBuilder(model)
+  const mask = (
+    buildTemplateSampler: SamplerTemplateBuilder,
+    adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number
+  ): SamplerBuilder => {
+    const buildSelector = buildTemplateSampler(model)
 
-  //   return async (cpuLogits, tokens, completion, config) => {
-  //     const logits = cpuLogits.data
+    return (priorCompletion: string, temperature: number, top_p: number): Sampler => {
+      const selector = buildSelector(priorCompletion)
 
-  //     const relevantTokens = selector(logits, tokens, completion)
+      return (cpuLogits, tokens, completion) => {
+        const logits = cpuLogits.data
 
-  //     const start = performance.now()
-  //     const modified = logits.toArray().map(adjust(relevantTokens))
+        const relevantTokens = selector(cpuLogits, tokens, completion)
 
-  //     logits.copyFrom(new Float32Array(modified))
+        const start = performance.now()
+        const modified = logits.toArray().map(adjust(relevantTokens))
 
-  //     console.log({ maskPerf: performance.now() - start })
+        logits.copyFrom(new Float32Array(modified))
 
-  //     return tvm.sampleTopPFromLogits(logits, config.temperature, config.top_p)
-  //   }
-  // }
+        console.log({ maskPerf: performance.now() - start })
+
+        return tvm.sampleTopPFromLogits(logits, temperature, top_p)
+      }
+    }
+  }
 
   return {
     prefer: (templateSampler, weight) => penalize(templateSampler, 1/weight),
     avoid: (templateSampler, weight) => penalize(templateSampler, weight),
-    // accept: samplerInit => mask(
-    //   samplerInit,
-    //   (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY
-    // ),
-    // reject: selectBuilder => mask(
-    //   samplerInit,
-    //   (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit
-    // )
+    accept: templateSampler => mask(
+      templateSampler,
+      (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? logit : Number.NEGATIVE_INFINITY
+    ),
+    reject: templateSampler => mask(
+      templateSampler,
+      (relevantTokens) => (logit, idx) => relevantTokens.includes(idx) ? Number.NEGATIVE_INFINITY : logit
+    )
   }
 }
 
-export const arrayStartsWith = <T>(starts: T[]) => (xs: T[]) => {
+export const arrayStartsWith = <T>(starts: T[], xs: T[]) => {
   for (let i = 0; i < starts.length; i++) {
     if (starts[i] !== xs[i]) {
       return false
@@ -161,59 +149,65 @@ const encodeExtension = (tokenizer: Tokenizer, text: string, extension: string) 
     const lastTokenIdx = encoded.indexOf(lastToken)
 
     if (lastTokenIdx !== -1) {
-      return encoded.slice(lastTokenIdx)
+      return encoded.slice(lastTokenIdx + 1)
     }
   }
 }
 
-export const oneOf =
-  (items: string[]): SamplerTemplateBuilder =>
-    (model: Model): SamplerSelectBuilder =>
-      (priorCompletion): SamplerSelector => {
-        const encoded = items.map(
-          item => {
-            const extEncoding = encodeExtension(model.tokenizer, priorCompletion, item)
+export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
+  const encoded = items.map(
+    item => {
+      const extEncoding = encodeExtension(model.tokenizer, priorCompletion, item)
 
-            if (extEncoding === undefined) {
-              console.error('Failed to generate extension tokens, ignoring', item)
-              return []
-            }
-
-            return Array.from(extEncoding)
-          }
-        )
-
-        return (_logits, tokens, _completions) => {
-          const filtered = encoded.filter(arrayStartsWith(tokens))
-          const nextRelevantTokens = filtered.map(x => x[tokens.length] )
-          console.log({
-            nextRelevantTokens,
-            nextRelevantChars: nextRelevantTokens.map(x => model.tokenizer.decode(new Int32Array([x]))),
-            filtered,
-            tokens: [...tokens],
-            tokensChars: model.tokenizer.decode(new Int32Array(tokens)), // TODO fixme tokenizer.decode should take numbers
-            items,
-            encoded,
-          })
-
-          return nextRelevantTokens
-        }
+      if (extEncoding === undefined) {
+        console.error('Failed to generate extension tokens, ignoring', item)
+        return []
       }
 
-export const chars = {
-  number: oneOf(['0','1','2','3','4','5','6', '7', '8', '9',',','.'])
-    // NOTE this encourages single char tokens which may result in less expected inferred text
+      return Array.from(extEncoding)
+    }
+  )
+
+  return (_logits, tokens, _completions) => {
+    const filtered = encoded.filter(item => arrayStartsWith(tokens, item) && item.length > tokens.length)
+    const nextRelevantTokens = filtered.map(x => x[tokens.length] )
+    console.log({
+      nextRelevantTokens,
+      nextRelevantChars: nextRelevantTokens.map(x => model.tokenizer.decode(new Int32Array([x]))),
+      filtered,
+      tokens: [...tokens],
+      tokensChars: model.tokenizer.decode(new Int32Array(tokens)), // TODO fixme tokenizer.decode should take numbers
+      items,
+      encoded,
+    })
+
+    return nextRelevantTokens
+  }
 }
 
-export const fn = (model: Model): Config[] => {
-  const bias = buildBiases(model)
+export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
+  const encoded = chars.map(
+    char => {
+      const extEncoding = encodeExtension(model.tokenizer, priorCompletion, char)
+      // FIXME i probably want to do something different here for single characters
+      // encodeExtension will produce the tokens which should continue from prior, but since we use the same tokens again
+      // to bias, it's not going to work the same as one of. Instead we want to have single-char tokens that always
+      // make sense given the existing sequence - i.e. if the first char is the first in sequence, then we want a sequence
+      // start number char after that, we want single char number tokens that aren't BOS / subject to merge
 
-  return [
-    {
-      sampler: bias.accept(chars.number)
-    },
-    {
-      sampler: bias.prefer(oneOf(['boop', 'beep']), 100)
+      if (extEncoding === undefined) {
+        console.error('Failed to generate extension tokens, ignoring', char)
+        return []
+      }
+
+      return Array.from(extEncoding)
     }
-  ]
+  ).flat()
+
+  return () => encoded
+}
+
+export const chars = {
+  number: consistsOf(['0','1','2','3','4','5','6', '7', '8', '9',',','.'])
+    // NOTE this encourages single char tokens which may result in less expected inferred text
 }
