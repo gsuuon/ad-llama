@@ -14,7 +14,7 @@ renderTemplate(app, async () => {
       guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'),
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
       new URLSearchParams(window.location.search).get('cpu') === null
-        ? TargetDevice.GPU // FIXME TargetDevice.CPU seems to be broken right now?
+        ? TargetDevice.GPU // TODO TargetDevice.CPU wont work until we have tvmjs wasm64 -- try to rebuild with emcc -sMEMORY64
         : TargetDevice.CPU 
     )
 
