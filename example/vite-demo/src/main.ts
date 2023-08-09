@@ -25,18 +25,20 @@ renderTemplate(app, async () => {
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
 
+  const { bias } = model
+
   return template`{
   "class": "${a('class', {
-    sampler: model.biases.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
+    sampler: bias.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
   })}",
   "subclass": "${a('subclass')}",
   "name": "${(a('name'))}",
   "weapon": "${a('special weapon', {
-    sampler: model.biases.prefer(oneOf(['nun-chucks', 'beam cannon']), 100)
+    sampler: bias.prefer(oneOf(['nun-chucks', 'beam cannon']), 10)
   })}",
   "description": "${(a('clever description', {maxTokens: 1000, stops: ['\n']}))}",
   "age": ${a('age', {
-    sampler: model.biases.accept(chars.number([','])),
+    sampler: bias.accept(chars.number),
     maxTokens: 4,
   })},
   "items": [

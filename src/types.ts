@@ -1,4 +1,4 @@
-import type { SamplerBuilder, Biases } from './sample.js'
+import type { SamplerBuilder, Bias } from './sample.js'
 
 export enum TargetDevice {
   CPU = 'cpu',
@@ -74,7 +74,7 @@ export type LoadedModel = {
     config?: ModelGenConfig
   ) => Promise<string>
   cancel: () => Promise<void>
-  biases: Biases
+  bias: Bias
 } 
 
 export type ModelSpec = {

@@ -21,15 +21,13 @@ type SamplerSelector = (cpuLogits: CpuNDArray, tokens: number[], completion: str
 /**
  * Build the sample selector -- called once for each generation (each expression in the tagged template)
  */
-type SamplerSelectBuilder = (priorCompletion: string) => SamplerSelector
+type SamplerSelectBuilder = (priorCompletion: string, stops: string[]) => SamplerSelector
 
 /**
  * Build the sampler given a model -- called once per template
  */
 type SamplerTemplateBuilder = (model: Model) => SamplerSelectBuilder
 
-type Bias = (templateSampler: SamplerTemplateBuilder, weight: number) => SamplerBuilder
-type Mask = (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
 
 export type Sampler = (
   cpuLogits: CpuNDArray,
@@ -39,6 +37,7 @@ export type Sampler = (
 
 export type SamplerBuilder = (
   priorCompletion: string,
+  stops: string[],
   temperature: number,
   top_p: number
 ) => Sampler
@@ -49,21 +48,21 @@ export type Model = {
   sample: (logits: CpuNDArray, temperature: number, top_p: number) => number
 }
 
-export type Biases = {
-  prefer: Bias
-  avoid: Bias
-  accept: Mask
-  reject: Mask
+export type Bias = {
+  prefer: (templateSampler: SamplerTemplateBuilder, weight: number) => SamplerBuilder
+  avoid: (templateSampler: SamplerTemplateBuilder, weight: number) => SamplerBuilder
+  accept: (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
+  reject: (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
 }
 
-export const buildBiases = (model: Model): Biases => {
+export const buildBias = (model: Model): Bias => {
   const { tvm, sample } = model
 
   const penalize = (buildTemplateSampler: SamplerTemplateBuilder, weight: number): SamplerBuilder => {
     const buildSelector = buildTemplateSampler(model)
 
-    return (priorCompletion: string, temperature: number, top_p: number): Sampler => {
-      const selector = buildSelector(priorCompletion)
+    return (priorCompletion, stops, temperature, top_p): Sampler => {
+      const selector = buildSelector(priorCompletion, stops)
 
       return (cpuLogits, tokens, completion) => {
         const logits = cpuLogits.data
@@ -97,8 +96,8 @@ export const buildBiases = (model: Model): Biases => {
   ): SamplerBuilder => {
     const buildSelector = buildTemplateSampler(model)
 
-    return (priorCompletion: string, temperature: number, top_p: number): Sampler => {
-      const selector = buildSelector(priorCompletion)
+    return (priorCompletion, stops, temperature, top_p): Sampler => {
+      const selector = buildSelector(priorCompletion, stops)
 
       return (cpuLogits, tokens, completion) => {
         const logits = cpuLogits.data
@@ -192,7 +191,7 @@ export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: st
   }
 }
 
-export const consistsOf = (chars: string[], endings: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
+export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletion: string, endings: string[]): SamplerSelector => {
   const encodedTokens = chars.map(
     char => {
       const extEncoding = encodeExtension(model.tokenizer, priorCompletion, char)
@@ -238,7 +237,7 @@ export const consistsOf = (chars: string[], endings: string[]) => (model: Model)
 }
 
 export const chars = {
-  number: (endings: string[] = []) => consistsOf(['0','1','2','3','4','5','6', '7', '8', '9'], endings)
+  number: consistsOf(['0','1','2','3','4','5','6', '7', '8', '9'])
     // NOTE this encourages single char tokens which may result in less expected inferred text
     // I think there are no double-number tokens in llama 2 tokenizer vocab
 }

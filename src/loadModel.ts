@@ -5,7 +5,7 @@ import { Tokenizer } from '@mlc-ai/web-tokenizers'
 import type { DeviceNDArray, CpuNDArray } from './sample.js'
 
 import { TargetDevice } from './types.js'
-import { buildBiases } from './sample.js'
+import { buildBias } from './sample.js'
 
 
 import type {
@@ -277,7 +277,7 @@ export default async (
     const buildSampler = config?.sampler
     const sample =
       buildSampler
-      ? buildSampler(priorCompletion, temperature, top_p)
+      ? buildSampler(priorCompletion, stops, temperature, top_p)
       : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
 
     const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
@@ -406,11 +406,11 @@ export default async (
     return completion
   }
 
-  const biases = buildBiases({ tvm, tokenizer, sample: sampleTokenFromLogits })
+  const bias = buildBias({ tvm, tokenizer, sample: sampleTokenFromLogits })
 
   const loadedModel = {
     generate,
-    biases,
+    bias,
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
       preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
