@@ -36,14 +36,15 @@ For an example of more complicated usage including validation, retry logic and t
 
 ## API
 ### Generation
-Each expression in the template literal can be configured independently - you can set a different temperature, token count, max length and more, per expression. Check the `AdExprConfig` type in [./src/types.ts](./src/types.ts) for all options.
+Each expression in the template literal can be configured independently - you can set a different temperature, token count, max length and more. Check the `AdExprConfig` type in [./src/types.ts](./src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed. If you don't need to set expression options at all, just put a string in the expression.
 
 ```typescript
 template`{
   "description": "${a('clever description', {
     maxTokens: 1000,
     stops: ['\n']
-  })}"
+  })}",
+  "class": "${'a primary class for the character'}"
 }`
 ```
 
@@ -84,8 +85,10 @@ decode([7953]) === 'foo'
 
 `oneOf` is for strings - each sample has logits modified depending on the tokens which are still relevant given the already sampled tokens. For example, if we have `oneOf(['ranger', 'wizard'])` and we've already sampled 'w', the only next relevant tokens would be from 'izard'. If you want `oneOf` to stop at one of the choices, include the stop character (by default the next character after the expression), eg: `oneOf(['ranger"', 'wizard"'])`.
 
+Even though `reject(oneOf(['ranger', 'wizard']))` will never make it past the first token for either of the strings, giving the entire string still lets you target the correct tokens for completing those specific strings.
+
 #### Validation
-You can provide an expression validation function with a retry count. If validation fails, that expression will be attempted again up to retry times. You can also transform the result of the expression generation.
+You can provide an expression validation function with a retry count. If validation fails, that expression will be attempted again up to retry times, after which whatever was generated is taken. You can also transform the result of the expression generation (this happens whether validation passes or not).
 
 ```typescript
 validate?: {
@@ -123,3 +126,9 @@ const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-cha
 
 # Motivation
 I was inspired by [guidance](https://github.com/microsoft/guidance) but felt that tagged template literals were a better way to express structured inference. I also think [grammar](https://github.com/ggerganov/llama.cpp/pull/1773) based sampling is neat, and wanted to add a way to plug something like that into MLC infrastructure.
+
+# Todos
+- [ ] runs on Deno
+- [ ] can target cpu
+- [ ] repeatable subtemplates
+- [ ] template expressions can reference previously generated expressions
