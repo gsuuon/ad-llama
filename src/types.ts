@@ -44,8 +44,8 @@ export type CommonConfig = {
   temperature?: number
   top_p?: number
   validate?: {
-    check: (partial: string) => boolean
-    transform: (partial: string) => string
+    check?: (partial: string) => boolean
+    transform?: (partial: string) => string
     retries: number
   }
   sampler?: SamplerBuilder

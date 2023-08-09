@@ -34,6 +34,67 @@ console.log(await result.collect())
 
 For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](./example/vite-demo/hn/main.ts)
 
+## API
+### Generation
+Each expression in the template literal can be configured independently - you can set a different temperature, token count, max length and more, per expression. Check the `AdExprConfig` type in [./src/types.ts](./src/types.ts) for all options.
+
+```typescript
+template`{
+  "description": "${a('clever description', {
+    maxTokens: 1000,
+    stops: ['\n']
+  })}"
+}`
+```
+
+#### Biased Sampling
+You can modify the sampler for each expression -- this allows you to adjust the logits before sampling. You can, for example, only accept number characters for one expression, while in another avoid specific strings. The main example [here](./example/vite-demo/src/main.ts) shows some of these options. You can build your own, but there are some helper functions exposed as `sample` to build samplers. The loaded `model` object has a `bias` field which configures the sampling - `avoid`, `prefer` allow you to adjust relative likelihood of certain tokens ids, while `reject`, `accept` change the logits to negative infinity for some ids (or all other ids).
+
+```typescript
+import { sample } from 'ad-llama'
+
+const model = await loadModel(...)
+
+const { bias } = model
+const { oneOf, consistsOf } = sample
+
+template`{
+  "weapon": "${a('special weapon', {
+    sampler: bias.prefer(oneOf(['Nun-chucks', 'Beam Cannon']), 10),
+  })}",
+  "age": ${a('age', {
+    sampler: bias.accept(consistsOf(['0','1','2','3','4','5','6', '7', '8', '9'])),
+    maxTokens: 3
+  })},
+}`
+```
+
+##### Sampler builder helpers
+
+`oneOf`, `consistsOf` try to generate relevant tokens for the provided strings in the context of the current generation expression -- as tokenizers are stateful, a simple encoding of just the provided strings won't necessarily produce tokens that would fit into the existing sequence. For example, with Llama 2's tokenizer `foo` and `"foo"` encode to completely different tokens:
+
+```javascript
+encode('"foo"') === [376, 5431, 29908]
+encode('foo') === [7953]
+decode([5431]) === 'foo'
+decode([7953]) === 'foo'
+```
+
+`consistsOf` is for classes of characters - each sample in that expression generation will have the same token logits modified based on the given relevant tokens. So in `consistsOf(['a','b'])`, every sample will have tokens for 'a' and 'b' modified.
+
+`oneOf` is for strings - each sample has logits modified depending on the tokens which are still relevant given the already sampled tokens. For example, if we have `oneOf(['ranger', 'wizard'])` and we've already sampled 'w', the only next relevant tokens would be from 'izard'. If you want `oneOf` to stop at one of the choices, include the stop character (by default the next character after the expression), eg: `oneOf(['ranger"', 'wizard"'])`.
+
+#### Validation
+You can provide an expression validation function with a retry count. If validation fails, that expression will be attempted again up to retry times. You can also transform the result of the expression generation.
+
+```typescript
+validate?: {
+  check?: (partial: string) => boolean
+  transform?: (partial: string) => string
+  retries: number
+}
+```
+
 ## Vite HMR
 Waiting for models to reload can be tedious, even when they're cached. ad-llama should work with vite HMR so the loaded models stay in memory. Put this in your source file to create an HMR boundary:
 ```diff
