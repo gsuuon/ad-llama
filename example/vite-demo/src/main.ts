@@ -27,16 +27,17 @@ renderTemplate(app, async () => {
 
   return template`{
   "class": "${a('class', {
-    sampler: model.biases.avoid(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)), 100000)
+    sampler: model.biases.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
   })}",
   "subclass": "${a('subclass')}",
   "name": "${(a('name'))}",
   "weapon": "${a('special weapon', {
-    sampler: model.biases.prefer(oneOf(['nun-chucks', 'beam cannon']), 10000)
+    sampler: model.biases.prefer(oneOf(['nun-chucks', 'beam cannon']), 100)
   })}",
   "description": "${(a('clever description', {maxTokens: 1000, stops: ['\n']}))}",
   "age": ${a('age', {
-    sampler: model.biases.prefer(chars.number, 100),
+    sampler: model.biases.accept(chars.number([','])),
+    maxTokens: 4,
   })},
   "items": [
     {

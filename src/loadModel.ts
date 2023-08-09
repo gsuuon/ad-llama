@@ -113,7 +113,8 @@ export default async (
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
   const w = window as any
-  w.tokenizer = tokenizer
+  w.encode = (x: string) => Array.from(tokenizer.encode(x))
+  w.decode = (xs: number[]) => tokenizer.decode(new Int32Array(xs))
 
   updateReport({ loadTokenizer: 'done' })
 

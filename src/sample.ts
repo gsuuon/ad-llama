@@ -71,7 +71,12 @@ export const buildBiases = (model: Model): Biases => {
         const relevantTokens = selector(cpuLogits, tokens, completion)
 
         if (relevantTokens.length > 0) {
-          console.log({penalizeTokens: relevantTokens, weight})
+          console.log({
+            penalizeTokens: relevantTokens,
+            tokens,
+            decodedTokens: model.tokenizer.decode(new Int32Array(tokens)),
+            weight,
+          })
           tvm.beginScope()
           const relevantTokensNDArray = tvm.empty([1, relevantTokens.length], 'int32', tvm.cpu())
           relevantTokensNDArray.copyFrom(relevantTokens)
@@ -100,12 +105,14 @@ export const buildBiases = (model: Model): Biases => {
 
         const relevantTokens = selector(cpuLogits, tokens, completion)
 
-        const start = performance.now()
-        const modified = logits.toArray().map(adjust(relevantTokens))
+        if (relevantTokens.length > 0) {
+          const start = performance.now()
+          const modified = logits.toArray().map(adjust(relevantTokens))
 
-        logits.copyFrom(new Float32Array(modified))
+          logits.copyFrom(new Float32Array(modified))
 
-        console.log({ maskPerf: performance.now() - start })
+          console.log({ maskPerf: performance.now() - start })
+        }
 
         return tvm.sampleTopPFromLogits(logits, temperature, top_p)
       }
@@ -185,8 +192,8 @@ export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: st
   }
 }
 
-export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
-  const encoded = chars.map(
+export const consistsOf = (chars: string[], endings: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
+  const encodedTokens = chars.map(
     char => {
       const extEncoding = encodeExtension(model.tokenizer, priorCompletion, char)
       // FIXME i probably want to do something different here for single characters
@@ -200,14 +207,38 @@ export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletio
         return []
       }
 
+      if (endings.length > 0) {
+        const endingsTokens = endings.map(ending => {
+          const endingExtEncoding = encodeExtension(model.tokenizer, priorCompletion + char, ending)
+
+          if (endingExtEncoding !== undefined) {
+            return Array.from(endingExtEncoding)
+          }
+
+          return []
+        })
+
+        return Array.from(extEncoding).concat(endingsTokens.flat())
+      }
+
       return Array.from(extEncoding)
     }
   ).flat()
 
-  return () => encoded
+  const encoded = Array.from(new Set(encodedTokens))
+
+  return () => {
+    console.log({
+      consistsOfTokens: encoded,
+      consistsOfChars: encoded.map(x => model.tokenizer.decode(new Int32Array([x])))
+    })
+
+    return encoded
+  }
 }
 
 export const chars = {
-  number: consistsOf(['0','1','2','3','4','5','6', '7', '8', '9',',','.'])
+  number: (endings: string[] = []) => consistsOf(['0','1','2','3','4','5','6', '7', '8', '9'], endings)
     // NOTE this encourages single char tokens which may result in less expected inferred text
+    // I think there are no double-number tokens in llama 2 tokenizer vocab
 }
