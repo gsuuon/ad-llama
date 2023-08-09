@@ -2,8 +2,9 @@ import type { NDArray } from 'tvmjs'
 import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
+import type { DeviceNDArray, CpuNDArray } from './sample.js'
+
 import { TargetDevice } from './types.js'
-import type { Model, Biases } from './sample.js'
 import { buildBiases } from './sample.js'
 
 
@@ -28,7 +29,6 @@ export default async (
   updateReport: (loadReport: LoadReport) => void,
   targetDevice: TargetDevice,
 ): Promise<LoadedModel> => {
-
   const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
   const configResponse = await cacheScope('config').fetchWithCache(configUrl)
   // TODO ArtifactCache error is probably too cryptic if configurl is invalid
@@ -91,9 +91,6 @@ export default async (
     throw Error(err)
   }
 
-  const temperature_ = config.temperature ?? 1.0
-  const top_p_ = config.top_p ?? 0.95
-
   updateReport({ loadTokenizer: 'waiting' })
 
   const configTokenizerFiles = Object.entries({
@@ -115,6 +112,8 @@ export default async (
     .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
+  const w = window as any
+  w.tokenizer = tokenizer
 
   updateReport({ loadTokenizer: 'done' })
 
@@ -166,32 +165,42 @@ export default async (
     return [...prefix, ...encodedText, ...postfix]
   }
 
-  let logitsOnCpu: NDArray | undefined;
+  const logitsOnCpuCopyFromAndDispose = (() => {
+    let logitsOnCpu: NDArray | undefined;
 
-  const sampleTokenFromLogits = async (logits: NDArray, temperature?: number, top_p?: number) => { // TODO mask
-    tvm.beginScope()
+    return async (ndarray: DeviceNDArray): Promise<CpuNDArray> => { // WTB linear types
+      const logits = ndarray.data
 
-    if (logitsOnCpu === undefined) {
-      logitsOnCpu = tvm.detachFromCurrentScope(
-        tvm.empty(logits.shape, logits.dtype, tvm.cpu())
-      )
-    } else {
-      if (logits.shape[0] != logitsOnCpu.shape[0]) {
-        throw Error('Logits changed shape')
+      tvm.beginScope()
+
+      if (logitsOnCpu === undefined) {
+        logitsOnCpu = tvm.detachFromCurrentScope(
+          tvm.empty(logits.shape, logits.dtype, tvm.cpu())
+        )
+      } else {
+        if (logits.shape[0] != logitsOnCpu.shape[0]) {
+          throw Error('Logits changed shape')
+        }
+      }
+
+      logitsOnCpu.copyFrom(logits)
+      logits.dispose()
+
+      tvm.endScope()
+      await device?.sync()
+
+      return {
+        data: logitsOnCpu,
+        host: 'cpu'
       }
     }
+  })()
 
-    logitsOnCpu.copyFrom(logits)
-    logits.dispose()
-
-    tvm.endScope()
-
-    await device?.sync()
-
-    return tvm.sampleTopPFromLogits(logitsOnCpu, temperature ?? temperature_, top_p ?? top_p_)
+  const sampleTokenFromLogits = (ndarray: CpuNDArray, temperature: number, top_p: number) => {
+    return tvm.sampleTopPFromLogits(ndarray.data, temperature, top_p)
   }
 
-  const prefillStep = (text: string): NDArray => {
+  const prefillStep = (text: string): DeviceNDArray => {
     const tokens = tokenize(text)
     tvm.beginScope()
 
@@ -210,10 +219,13 @@ export default async (
 
     filledKvCacheLength += tokens.length
 
-    return logits
+    return {
+      host: 'dev',
+      data: logits,
+    }
   }
 
-  const decodeStep = (lastToken: number): NDArray => {
+  const decodeStep = (lastToken: number): DeviceNDArray => {
     tvm.beginScope()
 
     const inputNdArray = tvm.empty([1, 1], 'int32', device)
@@ -231,7 +243,10 @@ export default async (
 
     filledKvCacheLength += 1
 
-    return logits
+    return {
+      data: logits,
+      host: 'dev',
+    }
   }
 
   let modelState: ModelState = ModelState.Waiting
@@ -241,12 +256,7 @@ export default async (
   const unfill = () => {
     clearKvCaches(kvCache)
     filledKvCacheLength = 0
-    if (logitsOnCpu !== undefined) {
-      logitsOnCpu.dispose()
-      logitsOnCpu = undefined
-    }
   }
-
 
   const generate = async (
     prompt: string,
@@ -259,15 +269,15 @@ export default async (
     let tokens: number[] = []
     let completion = ''
 
-    const configSampler = config?.sampler
-    const sample =
-      configSampler
-      ? (logits: NDArray) => configSampler(logits, tokens, completion, { temperature, top_p })
-      : (logits: NDArray) => sampleTokenFromLogits(logits, temperature, top_p)
-
-    const temperature = config?.temperature
-    const top_p = config?.top_p
+    const temperature = config?.temperature ?? 1.0
+    const top_p = config?.top_p ?? 0.95
     const maxTokens = config?.maxTokens ?? 400
+
+    const buildSampler = config?.sampler
+    const sample =
+      buildSampler
+      ? buildSampler(priorCompletion, temperature, top_p)
+      : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
 
     const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
     console.info({generate: {prompt, stops, context: prefillText}})
@@ -276,7 +286,11 @@ export default async (
       unfill()
     }
 
-    const nextToken = await sample(prefillStep(prefillText))
+    const nextToken = sample(
+      await logitsOnCpuCopyFromAndDispose(prefillStep(prefillText)),
+      tokens,
+      completion
+    )
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
@@ -303,7 +317,11 @@ export default async (
 
     // TODO eos token
     while (!(modelState === ModelState.Cancelling) && completion.length < maxTokens) {
-      const nextToken = await sample(decodeStep(tokens[tokens.length - 1]))
+      const nextToken = sample(
+        await logitsOnCpuCopyFromAndDispose(decodeStep(tokens[tokens.length - 1])),
+        tokens,
+        completion
+      )
 
       tokens.push(nextToken)
 
@@ -387,7 +405,7 @@ export default async (
     return completion
   }
 
-  const biases = buildBiases({ tvm, tokenizer })
+  const biases = buildBiases({ tvm, tokenizer, sample: sampleTokenFromLogits })
 
   const loadedModel = {
     generate,

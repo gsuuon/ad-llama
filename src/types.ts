@@ -1,4 +1,4 @@
-import type { Sampler } from './sample.js'
+import type { SamplerBuilder, Biases } from './sample.js'
 
 export enum TargetDevice {
   CPU = 'cpu',
@@ -18,11 +18,6 @@ export type LoadReport = {
   ready?: boolean
   error?: any
 }
-
-export type AdTemplateExpression = {
-  prompt: string,
-  accept: any // TODO
-} | string
 
 export type StreamPartial = {
   type: 'lit'
@@ -53,16 +48,22 @@ export type CommonConfig = {
     transform: (partial: string) => string
     retries: number
   }
-  sampler?: Sampler
+  sampler?: SamplerBuilder
 }
 
 export type ModelGenConfig = {
   stream?: GenerationStreamHandler
 } & CommonConfig
 
-export type AdConfig = {
+export type AdExprConfig = {
   preword?: string
+  stops?: string[]
 } & CommonConfig
+
+export type AdTemplateExpression = {
+  prompt: string,
+  accept?: AdExprConfig
+} | string
 
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
@@ -73,7 +74,8 @@ export type LoadedModel = {
     config?: ModelGenConfig
   ) => Promise<string>
   cancel: () => Promise<void>
-}
+  biases: Biases
+} 
 
 export type ModelSpec = {
   modelWeightsConfigUrl: string // url of root of repo containing ndarray-cache.json and mlc-chat-config.json
