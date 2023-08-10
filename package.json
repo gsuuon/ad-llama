@@ -25,7 +25,8 @@
     "build": "rollup -c",
     "dev": "rollup -w -c",
     "serve": "rollup -w -c dev.config.mjs",
-    "docs": "typedoc src/index.ts --plugin typedoc-plugin-missing-exports"
+    "docs": "typedoc src/index.ts --plugin typedoc-plugin-missing-exports",
+    "docs:pin-git": "npm run docs -- --gitRevision v0.1.0"
   },
   "author": "gsuuon@gmail.com",
   "license": "MIT",
