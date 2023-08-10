@@ -1,4 +1,4 @@
-import type { SamplerBuilder, Bias } from './sample.js'
+import type { CreateSampler, Bias } from './sample.js'
 
 export enum TargetDevice {
   CPU = 'cpu',
@@ -48,7 +48,7 @@ export type CommonOptions = {
     transform?: (partial: string) => string
     retries: number
   }
-  sampler?: SamplerBuilder
+  sampler?: CreateSampler
 }
 
 export type GenerateOptions = {

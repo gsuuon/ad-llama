@@ -21,12 +21,12 @@ type SamplerSelector = (cpuLogits: CpuNDArray, tokens: number[], completion: str
 /**
  * Build the sample selector -- called once for each generation (each expression in the tagged template)
  */
-type SamplerSelectBuilder = (priorCompletion: string, stops: string[]) => SamplerSelector
+type CreateSamplerSelector = (priorCompletion: string, stops: string[]) => SamplerSelector
 
 /**
  * Build the sampler given a model -- called once per template
  */
-type SamplerTemplateBuilder = (model: Model) => SamplerSelectBuilder
+type CreateSamplerTemplate = (model: Model) => CreateSamplerSelector
 
 
 export type Sampler = (
@@ -35,7 +35,7 @@ export type Sampler = (
   completion: string
 ) => number
 
-export type SamplerBuilder = (
+export type CreateSampler = (
   priorCompletion: string,
   stops: string[],
   temperature: number,
@@ -49,16 +49,16 @@ export type Model = {
 }
 
 export type Bias = {
-  prefer: (templateSampler: SamplerTemplateBuilder, weight: number) => SamplerBuilder
-  avoid: (templateSampler: SamplerTemplateBuilder, weight: number) => SamplerBuilder
-  accept: (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
-  reject: (templateSampler: SamplerTemplateBuilder) => SamplerBuilder
+  prefer: (templateSampler: CreateSamplerTemplate, weight: number) => CreateSampler
+  avoid: (templateSampler: CreateSamplerTemplate, weight: number) => CreateSampler
+  accept: (templateSampler: CreateSamplerTemplate) => CreateSampler
+  reject: (templateSampler: CreateSamplerTemplate) => CreateSampler
 }
 
 export const buildBias = (model: Model): Bias => {
   const { tvm, sample } = model
 
-  const penalize = (buildTemplateSampler: SamplerTemplateBuilder, weight: number): SamplerBuilder => {
+  const penalize = (buildTemplateSampler: CreateSamplerTemplate, weight: number): CreateSampler => {
     const buildSelector = buildTemplateSampler(model)
 
     return (priorCompletion, stops, temperature, top_p): Sampler => {
@@ -91,9 +91,9 @@ export const buildBias = (model: Model): Bias => {
   }
 
   const mask = (
-    buildTemplateSampler: SamplerTemplateBuilder,
+    buildTemplateSampler: CreateSamplerTemplate,
     adjust: (relevantTokens: number[]) => (logit: number, idx: number) => number
-  ): SamplerBuilder => {
+  ): CreateSampler => {
     const buildSelector = buildTemplateSampler(model)
 
     return (priorCompletion, stops, temperature, top_p): Sampler => {
