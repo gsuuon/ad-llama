@@ -34,8 +34,7 @@ console.log(await result.collect())
 
 For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](./example/vite-demo/hn/main.ts)
 
-## API
-### Generation
+## Generation
 Each expression in the template literal can be configured independently - you can set a different temperature, token count, max length and more. Check the `AdExprConfig` type in [./src/types.ts](./src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed. If you don't need to set expression options at all, just put a string in the expression.
 
 ```typescript
@@ -48,7 +47,7 @@ template`{
 }`
 ```
 
-#### Biased Sampling
+### Biased Sampling
 You can modify the sampler for each expression -- this allows you to adjust the logits before sampling. You can, for example, only accept number characters for one expression, while in another avoid specific strings. The main example [here](./example/vite-demo/src/main.ts) shows some of these options. You can build your own, but there are some helper functions exposed as `sample` to build samplers. The loaded `model` object has a `bias` field which configures the sampling - `avoid`, `prefer` allow you to adjust relative likelihood of certain tokens ids, while `reject`, `accept` change the logits to negative infinity for some ids (or all other ids).
 
 ```typescript
@@ -70,7 +69,7 @@ template`{
 }`
 ```
 
-##### Sampler builder helpers
+#### Sampler builder helpers
 
 `oneOf`, `consistsOf` try to generate relevant tokens for the provided strings in the context of the current generation expression -- as tokenizers are stateful, a simple encoding of just the provided strings won't necessarily produce tokens that would fit into the existing sequence. For example, with Llama 2's tokenizer `foo` and `"foo"` encode to completely different tokens:
 
@@ -87,7 +86,7 @@ decode([7953]) === 'foo'
 
 Even though `reject(oneOf(['ranger', 'wizard']))` will never make it past the first token for either of the strings, giving the entire string still lets you target the correct tokens for completing those specific strings.
 
-#### Validation
+### Validation
 You can provide an expression validation function with a retry count. If validation fails, that expression will be attempted again up to retry times, after which whatever was generated is taken. You can also transform the result of the expression generation (this happens whether validation passes or not).
 
 ```typescript
