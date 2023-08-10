@@ -99,7 +99,7 @@ const asOp = (expr: TemplateExpression, nextLiteral: string) => ({
 type Op = string | {
   prompt: string
   stop: string
-  accept?: any
+  options?: TemplateExpressionOptions
 }
 
 
@@ -137,8 +137,8 @@ type Template = {
  */
 type CreateTemplate = {
   template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => Template
-  a: (prompt: string, accept?: TemplateExpressionOptions) => TemplateExpression
-  __: (prompt: string, accept?: TemplateExpressionOptions) => TemplateExpression
+  a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  __: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
 }
 
 /**
@@ -210,10 +210,10 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
               return completion + await model.generate(
                 op.prompt,
                 completion,
-                [op.stop, ...(op.accept?.stops ?? [])],
+                [op.stop, ...(op.options?.stops ?? [])],
                 {
                   stream,
-                  ...mergeAdModelGenConfig(config, op.accept)
+                  ...mergeAdModelGenConfig(config, op.options)
                 }
               )
             }
@@ -222,12 +222,12 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
         model
       }
     },
-    a: (prompt: string, accept?: TemplateExpressionOptions) => ({
+    a: (prompt: string, options?: TemplateExpressionOptions) => ({
       // TODO should I merge AdExprConfig from context here instead of within generate?
       prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
-      options: accept,
+      options,
     }),
-    __: (prompt: string, accept?: TemplateExpressionOptions) => ({ prompt, options: accept, }),
+    __: (prompt: string, options?: TemplateExpressionOptions) => ({ prompt, options }),
   })
 }
 
