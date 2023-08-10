@@ -1,7 +1,7 @@
 # ad-llama 🦙
 
 
-Use tagged template literals for structured Llama 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. Check [example/vite-demo](./example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
+Use tagged template literals for structured Llama 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. Check [example/vite-demo](https://github.com/gsuuon/ad-llama/tree/main/example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
 
 
 https://github.com/gsuuon/ad-llama/assets/6422188/54fed226-c29b-44d6-a797-cc39a4e5a5d1
@@ -33,12 +33,12 @@ const npc = template`{
 console.log(await npc.collect())
 ```
 
-For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](./example/vite-demo/hn/main.ts)
+For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](https://github.com/gsuuon/ad-llama/tree/main/example/vite-demo/hn/main.ts)
 
 ## Generation
 Each expression in the template literal is a new prompt and options. The prompt given for each expression is added to the system and preprompt established in context, and prior completion text (literal parts and as well as inferences) are added to the end of the LLM prompt as a partially completed assistant response (i.e. after [/INST]).
 
-Each template expression can be configured independently - you can set a different temperature, token count, max length and more. Check the `TemplateExpressionOptions` type in [./src/types.ts](./src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed. If you don't need to set expression options at all, just put a string in the expression.
+Each template expression can be configured independently - you can set a different temperature, token count, max length and more. Check the `TemplateExpressionOptions` type in [./src/types.ts](https://github.com/gsuuon/ad-llama/tree/main/src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed. If you don't need to set expression options at all, just put a string in the expression.
 
 ```typescript
 template`{
@@ -51,7 +51,7 @@ template`{
 ```
 
 ### Biased Sampling
-You can modify the sampler for each expression -- this allows you to adjust the logits before sampling. You can, for example, only accept number characters for one expression, while in another avoid specific strings. The main example [here](./example/vite-demo/src/main.ts) shows some of these options. You can build your own, but there are some helper functions exposed as `sample` to build samplers. The loaded `model` object has a `bias` field which configures the sampling - `avoid`, `prefer` allow you to adjust relative likelihood of certain tokens ids, while `reject`, `accept` change the logits to negative infinity for some ids (or all other ids).
+You can modify the sampler for each expression -- this allows you to adjust the logits before sampling. You can, for example, only accept number characters for one expression, while in another avoid specific strings. The main example [here](https://github.com/gsuuon/ad-llama/tree/main/example/vite-demo/src/main.ts) shows some of these options. You can build your own, but there are some helper functions exposed as `sample` to build samplers. The loaded `model` object has a `bias` field which configures the sampling - `avoid`, `prefer` allow you to adjust relative likelihood of certain tokens ids, while `reject`, `accept` change the logits to negative infinity for some ids (or all other ids).
 
 ```typescript
 import { sample } from 'ad-llama'
