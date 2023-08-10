@@ -13,17 +13,14 @@ import type {
 import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
 
-/**
- * Guess a ModelSpec based on a given prebuilt id (one of the mlc-llm prebuilts)
- * NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
- */
-export const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works for currently known prebuilts
-    modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
-    modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
-})
 
 let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
 
+// NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
+const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works for currently known prebuilts
+    modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
+    modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
+})
 /**
  * Load a model to be used with ad
  *
@@ -34,10 +31,12 @@ let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
  * ```
  */
 export const loadModel = async (
-  spec: ModelSpec,
+  specOrId: ModelSpec | string,
   report?: (loadReport: LoadReport) => void,
   targetDevice: TargetDevice = TargetDevice.GPU,
 ): Promise<LoadedModel> => {
+  const spec = typeof specOrId === 'string' ? guessModelSpecFromPrebuiltId(specOrId) : specOrId
+
   let loadReport: LoadReport = {
     modelSpec: spec,
     targetDevice
