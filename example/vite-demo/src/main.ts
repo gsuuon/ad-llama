@@ -1,6 +1,6 @@
 import './style.css'
 import { renderTemplate } from './renderTemplate'
-import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice, sample } from 'ad-llama'
+import { ad, loadModel, TargetDevice, sample } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -11,7 +11,7 @@ const alsoToLowerCase = (x: string) => [x.toLowerCase(), x]
 renderTemplate(app, async () => {
   const model =
     await loadModel(
-      guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'),
+      'Llama-2-7b-chat-hf-q4f32_1',
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
       new URLSearchParams(window.location.search).get('cpu') === null
         ? TargetDevice.GPU // TODO TargetDevice.CPU wont work until we have tvmjs wasm64 -- try to rebuild with emcc -sMEMORY64
