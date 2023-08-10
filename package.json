@@ -1,7 +1,7 @@
 {
   "name": "ad-llama",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Structured inference with LLaMa 2 in your browser",
   "main": "lib/index.js",
   "files": [
@@ -26,7 +26,7 @@
     "dev": "rollup -w -c",
     "serve": "rollup -w -c dev.config.mjs",
     "docs": "typedoc src/index.ts --plugin typedoc-plugin-missing-exports",
-    "docs:pin-git": "npm run docs -- --gitRevision v0.1.0"
+    "docs:pin-git": "npm run docs -- --gitRevision v0.1.1"
   },
   "author": "gsuuon@gmail.com",
   "license": "MIT",
