@@ -7,20 +7,32 @@ import type {
   AdTemplateExpression,
   GenerationStreamHandler,
   AdExprConfig,
+  AdExpr
 } from './types.js'
 
 import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
 
-// FIXME This only works for Llama-2 models because of the wasm name
-export const guessModelSpecFromPrebuiltId = (id: string) => ({
+/**
+ * Guess a ModelSpec based on a given prebuilt id (one of the mlc-llm prebuilts)
+ * NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
+ */
+export const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works for currently known prebuilts
     modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
     modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 
 let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
 
-
+/**
+ * Load a model to be used with ad
+ *
+ * @example
+ * ```
+ * import { loadModel, guessModelSpecFromPrebuiltId } from 'ad-llama'
+ * const model = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1')
+ * ```
+ */
 export const loadModel = async (
   spec: ModelSpec,
   report?: (loadReport: LoadReport) => void,
@@ -97,13 +109,47 @@ const mergeAdModelGenConfig = (adConfig?: AdExprConfig, modelGenConfig?: ModelGe
   sampler: adConfig?.sampler ?? modelGenConfig?.sampler
 })
 
-// I think this would work better with a completion model than chat model
-export const ad = (model: LoadedModel) => {
-  // TODO these are here to so that they're only available after loading a model
-  // Reconsider if that design still makes sense. Maybe it'd be useful to define templates without
-  // having a model yet.
-  // The idea was that you could rely on intellisense alone to figure what to call to when getting started
-  return (system: string, preprompt?: string, config?: AdExprConfig) => ({
+/**
+ * A defined template ready for inferencing
+ */
+export type AdTemplate = {
+  /**
+   * Collect the template as a string - optionally with a streaming handler
+   */
+  collect: (stream?: GenerationStreamHandler) => Promise<string>
+  model: LoadedModel // TODO refactor to just cancel() -- this is only used to cancel the underlying model
+}
+
+/**
+ * Methods for constructing a template
+ *
+ * @example
+ * ```
+ * const generate = ad(model)
+ * const { template, a } = generate('You are a Dungeon master', 'Create an interesting NPC')
+ *
+ * const adTemplate = template`{
+ *  "name": "${a('character name')}"
+ * }`
+ * ```
+ */
+export type AdTemplateBuilder = {
+  template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => AdTemplate
+  a: (prompt: string, accept?: AdExprConfig) => AdExpr
+  __: (prompt: string, accept?: AdExprConfig) => AdExpr
+}
+
+/**
+ * Establish context for template inference
+ */
+export type AdTemplateContext = (system: string, preprompt?: string, config?: AdExprConfig) => AdTemplateBuilder
+
+/**
+ * Create an ad-llama instance
+ */
+export const ad = (model: LoadedModel): AdTemplateContext => {
+  // TODO additional model configuration and context-local state goes here
+  return (system: string, preprompt?: string, config?: AdExprConfig): AdTemplateBuilder => ({
     template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 

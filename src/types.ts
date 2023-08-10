@@ -60,10 +60,12 @@ export type AdExprConfig = {
   stops?: string[]
 } & CommonConfig
 
-export type AdTemplateExpression = {
-  prompt: string,
+export type AdExpr = {
+  prompt: string
   accept?: AdExprConfig
-} | string
+}
+
+export type AdTemplateExpression = AdExpr | string
 
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
@@ -77,10 +79,18 @@ export type LoadedModel = {
   bias: Bias
 } 
 
+/**
+ * Specifies where to retrieve model weights and configuration
+ */
 export type ModelSpec = {
-  modelWeightsConfigUrl: string // url of root of repo containing ndarray-cache.json and mlc-chat-config.json
-    // TODO ensure this ends in '/' or else the last section gets replaced by new URL()
-  modelLibWasmUrl: string // url of the compiled wasm for model
+  /**
+   * URL of root of repo containing ndarray-cache.json and mlc-chat-config.json
+   */
+  modelWeightsConfigUrl: string // TODO ensure this ends in '/' or else the last section gets replaced by new URL()
+  /**
+   * URL of the compiled wasm for model
+   */
+  modelLibWasmUrl: string
 }
 
 
