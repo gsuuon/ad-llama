@@ -10,9 +10,9 @@ Say hi in [discord](https://discord.gg/Jag2h3fS4C)!
 `npm install -S ad-llama`
 
 ```javascript
-import { loadModel, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
+import { loadModel, ad } from 'ad-llama'
 
-const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+const loadedModel = await loadModel('Llama-2-7b-chat-hf-q4f32_1')
 const generator = ad(loadedModel)
 
 const { template, a } = generator(
