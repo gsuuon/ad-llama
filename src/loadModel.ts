@@ -2,7 +2,10 @@ import type { NDArray } from 'tvmjs'
 import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
+import type { DeviceNDArray, CpuNDArray } from './sample.js'
+
 import { TargetDevice } from './types.js'
+import { buildBias } from './sample.js'
 
 import type {
   ModelSpec,
@@ -26,11 +29,11 @@ export default async (
   targetDevice: TargetDevice,
 ): Promise<LoadedModel> => {
 
+  updateReport({ loadModelConfig: 'waiting' })
+
   const configUrl = new URL('mlc-chat-config.json', spec.modelWeightsConfigUrl).href
   const configResponse = await cacheScope('config').fetchWithCache(configUrl)
   // TODO ArtifactCache error is probably too cryptic if configurl is invalid
-
-  updateReport({ loadModelConfig: 'done' })
 
   const wasm = await (
     spec.modelLibWasmUrl.includes('localhost') // never cache localhost
@@ -54,10 +57,7 @@ export default async (
       throw Error('Cannot find GPU in environment')
     }
 
-    updateReport({
-      detectGPU: gpu.adapterInfo.vendor,
-      loadModelConfig: 'waiting'
-    })
+    updateReport({ detectGPU: gpu.adapterInfo.vendor })
 
     tvm.initWebGPU(gpu.device) 
   }
@@ -88,15 +88,16 @@ export default async (
     throw Error(err)
   }
 
-  const temperature_ = config.temperature ?? 1.0
-  const top_p_ = config.top_p ?? 0.95
-
-  updateReport({ loadTokenizer: 'waiting' })
+  updateReport({
+    loadTokenizer: 'waiting',
+    loadModelConfig: 'done'
+  })
 
   const configTokenizerFiles = Object.entries({
     'tokenizer.model': Tokenizer.fromSentencePiece,
     'tokenizer.json': Tokenizer.fromJSON
   }).find(([file, _create]) => config.tokenizer_files.includes(file))
+    // preference comes from the order of tokenizer_files -- seems like .json is preferred over .model
 
   if (configTokenizerFiles == undefined) {
     const err = `Cant handle tokenizer files ${config.tokenizer_files}`;
@@ -111,6 +112,9 @@ export default async (
     .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
+  const w = window as any
+  w.encode = (x: string) => Array.from(tokenizer.encode(x))
+  w.decode = (xs: number[]) => tokenizer.decode(new Int32Array(xs))
 
   updateReport({ loadTokenizer: 'done' })
 
@@ -162,81 +166,88 @@ export default async (
     return [...prefix, ...encodedText, ...postfix]
   }
 
-  let logitsOnCpu: NDArray | undefined;
+  const logitsOnCpuCopyFromAndDispose = (() => {
+    let logitsOnCpu: NDArray | undefined;
 
-  const sampleTokenFromLogits = async (logits: NDArray, temperature?: number, top_p?: number, _mask?: number[]) => { // TODO mask
-    tvm.beginScope()
+    return async (ndarray: DeviceNDArray): Promise<CpuNDArray> => { // WTB linear types
+      const logits = ndarray.data
 
-    if (logitsOnCpu === undefined) {
-      logitsOnCpu = tvm.detachFromCurrentScope(
-        tvm.empty(logits.shape, logits.dtype, tvm.cpu())
-      )
-    } else {
-      if (logits.shape[0] != logitsOnCpu.shape[0]) {
-        throw Error('Logits changed shape')
+      tvm.beginScope()
+
+      if (logitsOnCpu === undefined) {
+        logitsOnCpu = tvm.detachFromCurrentScope(
+          tvm.empty(logits.shape, logits.dtype, tvm.cpu())
+        )
+      } else {
+        if (logits.shape[0] != logitsOnCpu.shape[0]) {
+          throw Error('Logits changed shape')
+        }
+      }
+
+      logitsOnCpu.copyFrom(logits)
+      logits.dispose()
+
+      tvm.endScope()
+      await device?.sync()
+
+      return {
+        data: logitsOnCpu,
+        host: 'cpu'
       }
     }
+  })()
 
-    logitsOnCpu.copyFrom(logits)
-    logits.dispose() // not sure if logits is at the right scope to be disposed from here
-
-    // we skip a new begin/end scope here, check https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L317
-    // if things break
-    // TODO mask
-    // we change the logits on cpu before doing sample
-
-    tvm.endScope()
-
-    await device?.sync()
-
-    return tvm.sampleTopPFromLogits(logitsOnCpu, temperature ?? temperature_, top_p ?? top_p_)
+  const sampleTokenFromLogits = (ndarray: CpuNDArray, temperature: number, top_p: number) => {
+    return tvm.sampleTopPFromLogits(ndarray.data, temperature, top_p)
   }
 
-  const prefillStep = async (text: string, temperature?: number, top_p?: number) => {
+  const prefillStep = (text: string): DeviceNDArray => {
     const tokens = tokenize(text)
     tvm.beginScope()
 
     const inputNdArray = tvm.empty([1, tokens.length], 'int32', device)
     inputNdArray.copyFrom(tokens)
-    // this is not a direct translation, not sure if the nested begin/endscopes are necessary
 
-    // TODO curpos param
-    // https://github.com/mlc-ai/web-llm/blob/824b7b3b2e22c69a2548f9516af9b9c7d012cd6b/src/llm_chat.ts#L269
-    const seqLenShape = tvm.makeShapeTuple([tokens.length]) 
-    // NOTE llm_chat.ts conflates forward/decode here into a single forward function that handles both
-    // i'm avoiding that, but if things break here check what's different
-
-    const retValue = prefill(inputNdArray, seqLenShape, kvCache, params)
-    // TODO is prefill stateful?
+    const retValue = prefill(
+      inputNdArray,
+      tvm.makeShapeTuple([tokens.length]),
+      kvCache,
+      params
+    )
 
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
-    // skipping the endscope -> attachtocurrentscope because we're still in same scope here
-
-    // TODO track seqlen, kv cache
-    // it looks like filledkvcachelength is to set curpos for some steps (decode vs prefill)?
     tvm.endScope()
 
-    // tvm.attachToCurrentScope(logits) // can I use unattached logits in sampleTokenFromLogits?
+    filledKvCacheLength += tokens.length
 
-    filledKvCacheLength += tokens.length // not sure if this is supposed to only increment after decoding?
-
-    return await sampleTokenFromLogits(logits, temperature, top_p)
+    return {
+      host: 'dev',
+      data: logits,
+    }
   }
 
-  const decodeStep = async (lastToken: number, temperature?: number, top_p?: number) => {
+  const decodeStep = (lastToken: number): DeviceNDArray => {
     tvm.beginScope()
+
     const inputNdArray = tvm.empty([1, 1], 'int32', device)
     inputNdArray.copyFrom([lastToken])
 
-    const seqLenShape = tvm.makeShapeTuple([filledKvCacheLength + 1])
-    const retValue = decode(inputNdArray, seqLenShape, kvCache, params)
+    const retValue = decode(
+      inputNdArray,
+      tvm.makeShapeTuple([filledKvCacheLength + 1]),
+      kvCache,
+      params
+    )
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
 
     tvm.endScope()
 
     filledKvCacheLength += 1
 
-    return await sampleTokenFromLogits(logits, temperature, top_p)
+    return {
+      data: logits,
+      host: 'dev',
+    }
   }
 
   let modelState: ModelState = ModelState.Waiting
@@ -246,40 +257,47 @@ export default async (
   const unfill = () => {
     clearKvCaches(kvCache)
     filledKvCacheLength = 0
-    if (logitsOnCpu !== undefined) {
-      logitsOnCpu.dispose()
-      logitsOnCpu = undefined
-    }
   }
-
 
   const generate = async (
     prompt: string,
-    completion: string,
+    priorCompletion: string,
     stops: string[],
     config?: ModelGenConfig
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
 
-    const temperature = config?.temperature
-    const top_p = config?.top_p
+    let tokens: number[] = []
+    let completion = ''
+
+    const temperature = config?.temperature ?? 1.0
+    const top_p = config?.top_p ?? 0.95
     const maxTokens = config?.maxTokens ?? 400
 
-    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${completion}`
+    const buildSampler = config?.sampler
+    const sample =
+      buildSampler
+      ? buildSampler(priorCompletion, stops, temperature, top_p)
+      : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
+
+    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
     console.info({generate: {prompt, stops, context: prefillText}})
 
     if (filledKvCacheLength > 0) {
       unfill()
     }
 
-    const nextToken = await prefillStep(prefillText, temperature, top_p)
+    const nextToken = sample(
+      await logitsOnCpuCopyFromAndDispose(prefillStep(prefillText)),
+      tokens,
+      completion
+    )
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
     }
 
-    let tokens = [nextToken]
-    let completedText = ''
+    tokens.push(nextToken)
 
     const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
       // Check each new character in next token to see if it forms the stop sequence
@@ -299,14 +317,18 @@ export default async (
     }
 
     // TODO eos token
-    while (!(modelState === ModelState.Cancelling) && completedText.length < maxTokens) {
-      const nextToken = await decodeStep(tokens[tokens.length - 1], temperature, top_p)
+    while (!(modelState === ModelState.Cancelling) && completion.length < maxTokens) {
+      const nextToken = sample(
+        await logitsOnCpuCopyFromAndDispose(decodeStep(tokens[tokens.length - 1])),
+        tokens,
+        completion
+      )
 
       tokens.push(nextToken)
 
       const updatedText = tokenizer.decode(new Int32Array(tokens))
 
-      const tokenDecodedText = updatedText.slice(completedText.length)
+      const tokenDecodedText = updatedText.slice(completion.length)
       // decoding individual tokens and combining does not produce
       // same result as decoding seq of tokens
 
@@ -316,12 +338,12 @@ export default async (
         const acceptedCompleteText = updatedText.slice(0, stopIdx)
 
         config?.stream?.({
-          content: acceptedCompleteText.slice(completedText.length),
+          content: acceptedCompleteText.slice(completion.length),
           type: 'gen',
           prompt
         })
 
-        completedText = acceptedCompleteText
+        completion = acceptedCompleteText
         break
       }
 
@@ -331,7 +353,7 @@ export default async (
         prompt
       })
 
-      completedText = updatedText
+      completion = updatedText
     }
 
     if (modelState === ModelState.Cancelling) {
@@ -343,16 +365,16 @@ export default async (
     modelState = ModelState.Waiting
 
     if (config?.validate) {
-      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completedText)) {
+      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completion)) {
         config?.stream?.({
           type: 'ungen',
           tokenCount: tokens.length,
-          content: completedText
+          content: completion
         })
 
-        console.log({failedValidation: completedText})
+        console.log({failedValidation: completion})
 
-        return await generate(prompt, completion, stops, {
+        return await generate(prompt, priorCompletion, stops, {
           ...config,
           validate: {
             ...config.validate,
@@ -366,10 +388,10 @@ export default async (
         config?.stream?.({
           type: 'ungen',
           tokenCount: tokens.length,
-          content: completedText
+          content: completion
         })
 
-        const transformed = config.validate.transform(completedText)
+        const transformed = config.validate.transform(completion)
 
         config?.stream?.({
           type: 'gen',
@@ -381,10 +403,16 @@ export default async (
       }
     }
 
-    return completedText
+    return completion
   }
 
-  const model = {
+  const bias = buildBias({ tvm, tokenizer, sample: sampleTokenFromLogits })
+
+  updateReport({ ready: true })
+
+  return {
+    generate,
+    bias,
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
       preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
@@ -393,8 +421,9 @@ export default async (
 
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
+      // This only saves prefilling the system + preprompt anyway - it won't do anything for generates since the generate prompt
+      // goes before the completion body
     },
-    generate,
     cancel: async () => {
       if (modelState === ModelState.Running) {
         modelState = ModelState.Cancelling
@@ -407,10 +436,6 @@ export default async (
       }, 16))
     }
   }
-
-  updateReport({ ready: true })
-
-  return model
 }
 
 

@@ -1,47 +1,66 @@
 import './style.css'
 import { renderTemplate } from './renderTemplate'
-import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice } from 'ad-llama'
+import { ad, guessModelSpecFromPrebuiltId, loadModel, TargetDevice, sample } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
+const alsoToLowerCase = (x: string) => [x.toLowerCase(), x]
+
 renderTemplate(app, async () => {
-  const gen = ad(
+  const model =
     await loadModel(
       guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'),
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
       new URLSearchParams(window.location.search).get('cpu') === null
-        ? TargetDevice.GPU // FIXME TargetDevice.CPU seems to be broken right now?
+        ? TargetDevice.GPU // TODO TargetDevice.CPU wont work until we have tvmjs wasm64 -- try to rebuild with emcc -sMEMORY64
         : TargetDevice.CPU 
     )
-  )
+
+  const gen = ad(model)
 
   const { template, a } = gen(
     'You are a dungeon master.',
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
 
+  const { bias } = model
+  const { oneOf, consistsOf, chars } = sample
+
   return template`{
-    "description": "${(a('clever description', {maxTokens: 1000, stops: ['\n']}))}",
-    "name": "${(a('name'))}",
-    "weapon": "${a('special weapon')}",
-    "items": [
-      {
-        "name": "${a('name')}",
-        "description": "${a('short description')}",
-        "type": "${a('type')}"
-      },
-      {
-        "name": "${a('name')}",
-        "description": "${a('short description')}",
-        "type": "${a('type')}"
-      },
-      {
-        "name": "${a('name')}",
-        "description": "${a('short description')}",
-        "type": "${a('type')}"
-      }
-    ]
-  }`
-})
+  "class": "${a('primary class for the character', {
+    sampler: bias.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
+  })}",
+  "subclass": "${a('subclass')}",
+  "name": "${(a('name', { sampler: bias.avoid(oneOf(['Eira', 'Zorvath', 'Kaelith']), 1.5) }))}",
+  "weapon": "${a('special weapon', { sampler: bias.prefer(oneOf(['Nun-chucks', 'Beam Cannon']), 10) })}",
+  "description": "${(a('clever description', {
+    maxTokens: 1000,
+    stops: ['\n'],
+    sampler: bias.avoid(consistsOf(['\n']), 1.3)
+  }))}",
+  "age": ${a('age', {
+    sampler: bias.accept(chars.number),
+    maxTokens: 3,
+    temperature: 1.01,
+    top_p: 0.99
+  })},
+  "items": [
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    },
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    },
+    {
+      "name": "${a('name')}",
+      "description": "${a('short description')}",
+      "type": "${a('type')}"
+    }
+  ]
+}`})

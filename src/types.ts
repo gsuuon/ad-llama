@@ -1,3 +1,5 @@
+import type { SamplerBuilder, Bias } from './sample.js'
+
 export enum TargetDevice {
   CPU = 'cpu',
   GPU = 'gpu'
@@ -16,11 +18,6 @@ export type LoadReport = {
   ready?: boolean
   error?: any
 }
-
-export type AdTemplateExpression = {
-  prompt: string,
-  accept: any // TODO
-} | string
 
 export type StreamPartial = {
   type: 'lit'
@@ -45,28 +42,28 @@ export type GenerationStreamHandler = (partial: StreamPartial) => void
 export type CommonConfig = {
   maxTokens?: number
   temperature?: number
-  top_p?: number,
+  top_p?: number
   validate?: {
-    check: (partial: string) => boolean,
-    transform: (partial: string) => string
+    check?: (partial: string) => boolean
+    transform?: (partial: string) => string
     retries: number
   }
+  sampler?: SamplerBuilder
 }
 
 export type ModelGenConfig = {
-  stream?: GenerationStreamHandler,
+  stream?: GenerationStreamHandler
 } & CommonConfig
 
-export type AdConfig = {
+export type AdExprConfig = {
   preword?: string
+  stops?: string[]
 } & CommonConfig
 
-export const mergeAdModelGenConfig = (adConfig?: AdConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
-  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
-  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
-  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
-  validate: adConfig?.validate ?? modelGenConfig?.validate
-})
+export type AdTemplateExpression = {
+  prompt: string,
+  accept?: AdExprConfig
+} | string
 
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
@@ -77,7 +74,8 @@ export type LoadedModel = {
     config?: ModelGenConfig
   ) => Promise<string>
   cancel: () => Promise<void>
-}
+  bias: Bias
+} 
 
 export type ModelSpec = {
   modelWeightsConfigUrl: string // url of root of repo containing ndarray-cache.json and mlc-chat-config.json

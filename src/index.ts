@@ -1,12 +1,13 @@
 import type {
   ModelSpec,
+  ModelGenConfig,
+  CommonConfig,
   LoadedModel,
   LoadReport,
   AdTemplateExpression,
   GenerationStreamHandler,
-  AdConfig,
+  AdExprConfig,
 } from './types.js'
-import { mergeAdModelGenConfig } from './types.js'
 
 import { TargetDevice } from './types.js'
 import doLoadModel from './loadModel.js'
@@ -87,13 +88,22 @@ type Op = string | {
   accept?: any
 }
 
+
+const mergeAdModelGenConfig = (adConfig?: AdExprConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
+  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
+  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
+  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
+  validate: adConfig?.validate ?? modelGenConfig?.validate,
+  sampler: adConfig?.sampler ?? modelGenConfig?.sampler
+})
+
 // I think this would work better with a completion model than chat model
 export const ad = (model: LoadedModel) => {
   // TODO these are here to so that they're only available after loading a model
   // Reconsider if that design still makes sense. Maybe it'd be useful to define templates without
   // having a model yet.
   // The idea was that you could rely on intellisense alone to figure what to call to when getting started
-  return (system: string, preprompt?: string, config?: AdConfig) => ({
+  return (system: string, preprompt?: string, config?: AdExprConfig) => ({
     template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 
@@ -155,14 +165,15 @@ export const ad = (model: LoadedModel) => {
         model
       }
     },
-    a: (prompt: string, accept?: any) => ({
+    a: (prompt: string, accept?: AdExprConfig) => ({
       prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
       accept,
     }),
-    __: (prompt: string, accept?: any) => ({ prompt, accept, }),
+    __: (prompt: string, accept?: AdExprConfig) => ({ prompt, accept, }),
   })
 }
 
 export { TargetDevice } from './types.js'
 
 export * as validate from './validate.js'
+export * as sample from './sample.js'
