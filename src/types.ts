@@ -39,7 +39,7 @@ export type StreamPartial = {
 
 export type GenerationStreamHandler = (partial: StreamPartial) => void
 
-export type CommonConfig = {
+export type CommonOptions = {
   maxTokens?: number
   temperature?: number
   top_p?: number
@@ -51,21 +51,19 @@ export type CommonConfig = {
   sampler?: SamplerBuilder
 }
 
-export type ModelGenConfig = {
+export type GenerateOptions = {
   stream?: GenerationStreamHandler
-} & CommonConfig
+} & CommonOptions
 
-export type AdExprConfig = {
+export type TemplateExpressionOptions = {
   preword?: string
   stops?: string[]
-} & CommonConfig
+} & CommonOptions
 
-export type AdExpr = {
+export type TemplateExpression = {
   prompt: string
-  accept?: AdExprConfig
-}
-
-export type AdTemplateExpression = AdExpr | string
+  options?: TemplateExpressionOptions
+} | string
 
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
@@ -73,7 +71,7 @@ export type LoadedModel = {
     prompt: string,
     completion: string,
     stops: string[],
-    config?: ModelGenConfig
+    config?: GenerateOptions
   ) => Promise<string>
   cancel: () => Promise<void>
   bias: Bias

@@ -11,7 +11,7 @@ import type {
   ModelSpec,
   LoadedModel,
   LoadReport,
-  ModelGenConfig,
+  GenerateOptions,
 } from './types.js'
 
 enum ModelState {
@@ -263,7 +263,7 @@ export default async (
     prompt: string,
     priorCompletion: string,
     stops: string[],
-    config?: ModelGenConfig
+    config?: GenerateOptions
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
 

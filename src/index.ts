@@ -1,13 +1,12 @@
 import type {
   ModelSpec,
-  ModelGenConfig,
-  CommonConfig,
+  GenerateOptions,
+  CommonOptions,
   LoadedModel,
   LoadReport,
-  AdTemplateExpression,
+  TemplateExpression,
   GenerationStreamHandler,
-  AdExprConfig,
-  AdExpr
+  TemplateExpressionOptions,
 } from './types.js'
 
 import { TargetDevice } from './types.js'
@@ -22,12 +21,15 @@ const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works 
     modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 /**
- * Load a model to be used with ad
+ * Load a model spec or try to guess it from a prebuilt-id.
+ *
+ * @remarks
+ * Passing a prebuilt-id currently only works for Llama 2 models due to wasm naming differences.
+ * Check here for some prebuilt-ids: {@link https://github.com/mlc-ai/binary-mlc-llm-libs}
  *
  * @example
  * ```
- * import { loadModel, guessModelSpecFromPrebuiltId } from 'ad-llama'
- * const model = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1')
+ * const model = await loadModel('Llama-2-7b-chat-hf-q4f32_1')
  * ```
  */
 export const loadModel = async (
@@ -85,7 +87,7 @@ if (import.meta.hot) {
   import.meta.hot.accept()
 }
 
-const asOp = (expr: AdTemplateExpression, nextLiteral: string) => ({
+const asOp = (expr: TemplateExpression, nextLiteral: string) => ({
   ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
   stop: nextLiteral.slice(0, 1) // determine stop from the next literal after expression
     // NOTE this isn't going to tokenize correctly necessarily
@@ -100,7 +102,7 @@ type Op = string | {
 }
 
 
-const mergeAdModelGenConfig = (adConfig?: AdExprConfig, modelGenConfig?: ModelGenConfig): CommonConfig => ({
+const mergeAdModelGenConfig = (adConfig?: TemplateExpressionOptions, modelGenConfig?: GenerateOptions): CommonOptions => ({
   maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
   temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
   top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
@@ -111,7 +113,7 @@ const mergeAdModelGenConfig = (adConfig?: AdExprConfig, modelGenConfig?: ModelGe
 /**
  * A defined template ready for inferencing
  */
-export type AdTemplate = {
+type Template = {
   /**
    * Collect the template as a string - optionally with a streaming handler
    */
@@ -132,24 +134,33 @@ export type AdTemplate = {
  * }`
  * ```
  */
-export type AdTemplateBuilder = {
-  template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => AdTemplate
-  a: (prompt: string, accept?: AdExprConfig) => AdExpr
-  __: (prompt: string, accept?: AdExprConfig) => AdExpr
+type CreateTemplate = {
+  template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => Template
+  a: (prompt: string, accept?: TemplateExpressionOptions) => TemplateExpression
+  __: (prompt: string, accept?: TemplateExpressionOptions) => TemplateExpression
 }
 
 /**
- * Establish context for template inference
+ * Establish a context for template inference
+ *
+ * @remarks
+ * Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates.
  */
-export type AdTemplateContext = (system: string, preprompt?: string, config?: AdExprConfig) => AdTemplateBuilder
+type CreateTemplateContext = (system: string, preprompt?: string, config?: TemplateExpressionOptions) => CreateTemplate
 
 /**
  * Create an ad-llama instance
+ *
+ * @example
+ * ```
+ * import { ad, loadModel } from 'ad-llama'
+ * const createContext = ad(await loadModel('Llama-2-7b-chat-hf-q4f32_1'))
+ * ```
  */
-export const ad = (model: LoadedModel): AdTemplateContext => {
+export const ad = (model: LoadedModel): CreateTemplateContext => {
   // TODO additional model configuration and context-local state goes here
-  return (system: string, preprompt?: string, config?: AdExprConfig): AdTemplateBuilder => ({
-    template: (literals: TemplateStringsArray, ...expressions: AdTemplateExpression[]) => {
+  return (system: string, preprompt?: string, config?: TemplateExpressionOptions): CreateTemplate => ({
+    template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 
       let ops: Op[] = []
@@ -210,11 +221,12 @@ export const ad = (model: LoadedModel): AdTemplateContext => {
         model
       }
     },
-    a: (prompt: string, accept?: AdExprConfig) => ({
+    a: (prompt: string, accept?: TemplateExpressionOptions) => ({
+      // TODO should I merge AdExprConfig from context here instead of within generate?
       prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
-      accept,
+      options: accept,
     }),
-    __: (prompt: string, accept?: AdExprConfig) => ({ prompt, accept, }),
+    __: (prompt: string, accept?: TemplateExpressionOptions) => ({ prompt, options: accept, }),
   })
 }
 
