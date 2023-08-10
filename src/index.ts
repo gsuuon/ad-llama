@@ -27,6 +27,7 @@ const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works 
  * Passing a prebuilt-id currently only works for Llama 2 models due to wasm naming differences.
  * Check here for some prebuilt-ids: {@link https://github.com/mlc-ai/binary-mlc-llm-libs}
  *
+ *
  * @example
  * ```
  * const model = await loadModel('Llama-2-7b-chat-hf-q4f32_1')
@@ -122,14 +123,14 @@ type Template = {
 }
 
 /**
- * Methods for constructing a template
+ * Template creation and helpers
  *
  * @example
  * ```
- * const generate = ad(model)
- * const { template, a } = generate('You are a Dungeon master', 'Create an interesting NPC')
+ * const createContext = ad(model)
+ * const { template, a } = createContext('You are a Dungeon master', 'Create an interesting NPC')
  *
- * const adTemplate = template`{
+ * const npc = template`{
  *  "name": "${a('character name')}"
  * }`
  * ```

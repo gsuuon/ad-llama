@@ -69,8 +69,6 @@ template`{
 }`
 ```
 
-#### Sampler builder helpers
-
 `oneOf`, `consistsOf` try to generate relevant tokens for the provided strings in the context of the current generation expression -- as tokenizers are stateful, a simple encoding of just the provided strings won't necessarily produce tokens that would fit into the existing sequence. For example, with Llama 2's tokenizer `foo` and `"foo"` encode to completely different tokens:
 
 ```javascript

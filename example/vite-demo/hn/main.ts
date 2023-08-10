@@ -91,5 +91,4 @@ renderTemplate(app, async () => {
     })},
     "info": "${__('Any additional information about remote work at the company.')}"
   }
-}`
-})
+}`})

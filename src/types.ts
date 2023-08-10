@@ -65,6 +65,14 @@ export type TemplateExpression = {
   options?: TemplateExpressionOptions
 } | string
 
+/**
+ * The loaded model to give to {@link ad} to create an ad context.
+ *
+ * @example
+ * ```
+ * const createContext = ad(loadedModel)
+ * ```
+ */
 export type LoadedModel = {
   setContext: (system: string, preprompt?: string) => Promise<void>
   generate: (
@@ -82,11 +90,19 @@ export type LoadedModel = {
  */
 export type ModelSpec = {
   /**
-   * URL of root of repo containing ndarray-cache.json and mlc-chat-config.json
+   * URL of root of repo containing ndarray-cache.json and mlc-chat-config.json For example:
+   *
+   * https://huggingface.co/mlc-ai/mlc-chat-Llama-2-7b-chat-hf-q4f32_1/resolve/main/
+   *
+   * @remarks
+   * For hugging face, this root currently returns 404 -- that's fine, as long as the files themselves can be fetched.
+   * Do not provide /tree/main URL's.
    */
   modelWeightsConfigUrl: string // TODO ensure this ends in '/' or else the last section gets replaced by new URL()
   /**
-   * URL of the compiled wasm for model
+   * URL of the compiled wasm for model. For example:
+   *
+   * https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/Llama-2-7b-chat-hf-q4f32_1-webgpu.wasm
    */
   modelLibWasmUrl: string
 }
