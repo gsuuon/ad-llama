@@ -1,0 +1,9 @@
+{
+  "visibilityFilters": {},
+  "navigationLinks": {
+    "Github": "https://www.github.com/gsuuon/ad-llama"
+  },
+  "customCss": "./style.css",
+  "excludeExternals": true,
+  "externalPattern": ["**/node_modules/**", "**/3rdparty/**"]
+}
