@@ -72,7 +72,7 @@ template`{
 }`
 ```
 
-`oneOf`, `consistsOf` try to generate relevant tokens for the provided strings in the context of the current generation expression -- as tokenizers are stateful, a simple encoding of just the provided strings won't necessarily produce tokens that would fit into the existing sequence. For example, with Llama 2's tokenizer `foo` and `"foo"` encode to completely different tokens:
+As tokenizers are stateful, a simple encoding of just the provided strings won't necessarily produce tokens that would fit into the existing sequence. For example, with Llama 2's tokenizer `foo` and `"foo"` encode to completely different tokens:
 
 ```javascript
 encode('"foo"') === [376, 5431, 29908]
@@ -81,7 +81,9 @@ decode([5431]) === 'foo'
 decode([7953]) === 'foo'
 ```
 
-`consistsOf` is for classes of characters - each sample in that expression generation will have the same token logits modified based on the given relevant tokens. So in `consistsOf(['a','b'])`, every sample will have tokens for 'a' and 'b' modified.
+`oneOf`, `consistsOf` try to figure out relevant tokens for the provided strings within the context of the currently inferring expression.
+
+`consistsOf` is for classes of characters - each sample will have the same token logits modified based on the given relevant tokens. So in `consistsOf(['a','b'])`, every sample will have tokens for 'a' and 'b' modified.
 
 `oneOf` is for strings - each sample has logits modified depending on the tokens which are still relevant given the already sampled tokens. For example, if we have `oneOf(['ranger', 'wizard'])` and we've already sampled 'w', the only next relevant tokens would be from 'izard'. If you want `oneOf` to stop at one of the choices, include the stop character (by default the next character after the expression), eg: `oneOf(['ranger"', 'wizard"'])`.
 
