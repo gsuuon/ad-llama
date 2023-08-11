@@ -12,6 +12,7 @@ import type {
   LoadedModel,
   LoadReport,
   GenerateOptions,
+  GenerationStreamHandler,
 } from './types.js'
 
 enum ModelState {
@@ -22,6 +23,69 @@ enum ModelState {
 
 const scope = (name?: string) => 'ad-llama' + name ? '/' + name : ''
 const cacheScope = (name: string) => new ArtifactCache(scope(name))
+
+const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
+  // Check each new character in next token to see if it forms the stop sequence
+  // with already completed text.
+  // This gets around the issue where our stop is `"` but the next token generates `",` which
+  // won't satisfy a straightforward endswith(stop)
+
+  for (let i = tokenDecodedText.length; i >= 0; i--) {
+    for (const stop of stops) {
+      if (text.slice(0, text.length - i).endsWith(stop)) {
+        return text.length - i - stop.length
+      }
+    }
+  }
+
+  return -1
+}
+
+const acceptTokenInference = (
+  tokenizer: Tokenizer,
+  stops: string[],
+  prompt: string,
+  stream?: GenerationStreamHandler
+) => {
+  let tokens: number[] = []
+  let completion = ''
+
+  return {
+    accept: (token: number) => {
+      tokens.push(token)
+
+      const updatedText = tokenizer.decode(new Int32Array(tokens))
+      const tokenDecodedText = updatedText.slice(completion.length)
+
+      const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
+
+      if (stopIdx !== -1) {
+        const acceptedCompleteText = updatedText.slice(0, stopIdx)
+
+        stream?.({
+          content: acceptedCompleteText.slice(completion.length),
+          type: 'gen',
+          prompt
+        })
+
+        completion = acceptedCompleteText
+
+        return false
+      }
+
+      stream?.({
+        content: tokenDecodedText,
+        type: 'gen',
+        prompt
+      })
+
+      completion = updatedText
+      return true
+    },
+    get completion() { return completion },
+    get tokens() { return tokens }
+  }
+}
 
 export default async (
   spec: ModelSpec,
@@ -263,98 +327,69 @@ export default async (
     prompt: string,
     priorCompletion: string,
     stops: string[],
-    config?: GenerateOptions
+    options?: GenerateOptions
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
 
-    let tokens: number[] = []
-    let completion = ''
+    const accepted = acceptTokenInference(tokenizer, stops, prompt, options?.stream)
 
-    const temperature = config?.temperature ?? 1.0
-    const top_p = config?.top_p ?? 0.95
-    const maxTokens = config?.maxTokens ?? 400
+    const temperature = options?.temperature ?? 1.0
+    const top_p = options?.top_p ?? 0.95
+    const maxTokens = options?.maxTokens ?? 400
 
-    const buildSampler = config?.sampler
+    const buildSampler = options?.sampler
     const sample =
       buildSampler
       ? buildSampler(priorCompletion, stops, temperature, top_p)
       : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
 
     const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
-    console.info({generate: {prompt, stops, context: prefillText}})
+    console.info('generate', prompt, {...options, prefillText})
 
     if (filledKvCacheLength > 0) {
       unfill()
     }
 
+    const prefillStart = performance.now()
     const nextToken = sample(
       await logitsOnCpuCopyFromAndDispose(prefillStep(prefillText)),
-      tokens,
-      completion
+      accepted.tokens,
+      accepted.completion
     )
+    console.debug('perf', {
+      prefill: performance.now() - prefillStart
+    })
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
     }
 
-    tokens.push(nextToken)
+    const continueSampling = accepted.accept(nextToken) // will be false if our first char was a stop
 
-    const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) => {
-      // Check each new character in next token to see if it forms the stop sequence
-      // with already completed text.
-      // This gets around the issue where our stop is `"` but the next token generates `",` which
-      // won't satisfy a straightforward endswith(stop)
+    if (continueSampling) {
+      while (!(modelState === ModelState.Cancelling) && accepted.completion.length < maxTokens) {
+        const tokens = accepted.tokens
 
-      for (let i = tokenDecodedText.length; i >= 0; i--) {
-        for (const stop of stops) {
-          if (text.slice(0, text.length - i).endsWith(stop)) {
-            return text.length - i - stop.length
-          }
+        const decodeStart = performance.now()
+        const nextToken = sample(
+          await logitsOnCpuCopyFromAndDispose(decodeStep(
+            tokens[tokens.length - 1]
+          )),
+          tokens,
+          accepted.completion
+        )
+
+        console.debug('perf', {
+          decode: performance.now() - decodeStart
+        })
+
+        if (!accepted.accept(nextToken)) {
+          break
         }
       }
-
-      return -1
     }
 
     // TODO eos token
-    while (!(modelState === ModelState.Cancelling) && completion.length < maxTokens) {
-      const nextToken = sample(
-        await logitsOnCpuCopyFromAndDispose(decodeStep(tokens[tokens.length - 1])),
-        tokens,
-        completion
-      )
-
-      tokens.push(nextToken)
-
-      const updatedText = tokenizer.decode(new Int32Array(tokens))
-
-      const tokenDecodedText = updatedText.slice(completion.length)
-      // decoding individual tokens and combining does not produce
-      // same result as decoding seq of tokens
-
-      const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
-
-      if (stopIdx !== -1) {
-        const acceptedCompleteText = updatedText.slice(0, stopIdx)
-
-        config?.stream?.({
-          content: acceptedCompleteText.slice(completion.length),
-          type: 'gen',
-          prompt
-        })
-
-        completion = acceptedCompleteText
-        break
-      }
-
-      config?.stream?.({
-        content: tokenDecodedText,
-        type: 'gen',
-        prompt
-      })
-
-      completion = updatedText
-    }
 
     if (modelState === ModelState.Cancelling) {
       modelState = ModelState.Waiting
@@ -364,36 +399,40 @@ export default async (
 
     modelState = ModelState.Waiting
 
-    if (config?.validate) {
-      if (config.validate.retries > 0 && config.validate.check && !config.validate.check(completion)) {
-        config?.stream?.({
+    if (options?.validate) {
+      if (
+        options.validate.retries > 0
+        && options.validate.check
+        && !options.validate.check(accepted.completion)
+      ) {
+        options?.stream?.({
           type: 'ungen',
-          tokenCount: tokens.length,
-          content: completion
+          tokenCount: accepted.tokens.length,
+          content: accepted.completion
         })
 
-        console.log({failedValidation: completion})
+        console.log({failedValidation: accepted.completion})
 
         return await generate(prompt, priorCompletion, stops, {
-          ...config,
+          ...options,
           validate: {
-            ...config.validate,
-            retries: config.validate.retries - 1,
+            ...options.validate,
+            retries: options.validate.retries - 1,
           }
         })
       }
 
-      if (config.validate.transform) {
+      if (options.validate.transform) {
         // We transform even if validation fails due to exhausting retries. Should we only transform if validate succeeds?
-        config?.stream?.({
+        options?.stream?.({
           type: 'ungen',
-          tokenCount: tokens.length,
-          content: completion
+          tokenCount: accepted.tokens.length,
+          content: accepted.completion
         })
 
-        const transformed = config.validate.transform(completion)
+        const transformed = options.validate.transform(accepted.completion)
 
-        config?.stream?.({
+        options?.stream?.({
           type: 'gen',
           content: transformed,
           prompt
@@ -403,7 +442,7 @@ export default async (
       }
     }
 
-    return completion
+    return accepted.completion
   }
 
   const bias = buildBias({ tvm, tokenizer, sample: sampleTokenFromLogits })
