@@ -87,6 +87,40 @@ const acceptTokenInference = (
   }
 }
 
+const perf = (() => {
+  let entries: Record<string, number[]> = {}
+
+  return {
+    timer: (label: string) => {
+      const start = performance.now()
+
+      return () => {
+        const result = performance.now() - start
+        entries[label] ??= []
+        entries[label].push(result)
+        // console.debug('perf', label, result)
+      }
+    },
+    get entries() { return entries },
+    get average() {
+      return 
+    },
+    summarize: () => {
+      const sums = Object.fromEntries(Object.entries(entries).map(
+        ([label, results]) => [label, results.reduce((a,x) => a + x, 0) ]
+      ))
+
+      const averages = Object.fromEntries(Object.entries(sums).map(
+        ([label, sum]) => [label, sum / entries[label].length ]
+      ))
+
+      console.debug('#perf', { sums, averages, entries })
+
+      entries = {}
+    }
+  }
+})()
+
 export default async (
   spec: ModelSpec,
   updateReport: (loadReport: LoadReport) => void,
@@ -252,6 +286,7 @@ export default async (
       logits.dispose()
 
       tvm.endScope()
+
       await device?.sync()
 
       return {
@@ -302,6 +337,7 @@ export default async (
       kvCache,
       params
     )
+
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
 
     tvm.endScope()
@@ -350,15 +386,13 @@ export default async (
       unfill()
     }
 
-    const prefillStart = performance.now()
+    const stopPrefillTimer = perf.timer('prefill')
     const nextToken = sample(
       await logitsOnCpuCopyFromAndDispose(prefillStep(prefillText)),
       accepted.tokens,
       accepted.completion
     )
-    console.debug('perf', {
-      prefill: performance.now() - prefillStart
-    })
+    stopPrefillTimer()
 
     if (nextToken === undefined) {
       throw Error('Prefilled with no sampled next token')
@@ -370,7 +404,7 @@ export default async (
       while (!(modelState === ModelState.Cancelling) && accepted.completion.length < maxTokens) {
         const tokens = accepted.tokens
 
-        const decodeStart = performance.now()
+        const stopDecodeTimer = perf.timer('decode')
         const nextToken = sample(
           await logitsOnCpuCopyFromAndDispose(decodeStep(
             tokens[tokens.length - 1]
@@ -378,10 +412,7 @@ export default async (
           tokens,
           accepted.completion
         )
-
-        console.debug('perf', {
-          decode: performance.now() - decodeStart
-        })
+        stopDecodeTimer()
 
         if (!accepted.accept(nextToken)) {
           break
@@ -441,6 +472,8 @@ export default async (
         return transformed
       }
     }
+
+    perf.summarize()
 
     return accepted.completion
   }
