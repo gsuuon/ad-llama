@@ -103,12 +103,12 @@ type Op = string | {
 }
 
 
-const mergeAdModelGenConfig = (adConfig?: TemplateExpressionOptions, modelGenConfig?: GenerateOptions): CommonOptions => ({
-  maxTokens: adConfig?.maxTokens ?? modelGenConfig?.maxTokens,
-  temperature: adConfig?.temperature ?? modelGenConfig?.temperature,
-  top_p: adConfig?.top_p ?? modelGenConfig?.top_p,
-  validate: adConfig?.validate ?? modelGenConfig?.validate,
-  sampler: adConfig?.sampler ?? modelGenConfig?.sampler
+const mergeAdModelGenConfig = (exprOpts?: TemplateExpressionOptions, genOpts?: GenerateOptions): CommonOptions => ({
+  maxTokens: exprOpts?.maxTokens ?? genOpts?.maxTokens,
+  temperature: exprOpts?.temperature ?? genOpts?.temperature,
+  top_p: exprOpts?.top_p ?? genOpts?.top_p,
+  validate: exprOpts?.validate ?? genOpts?.validate,
+  sampler: exprOpts?.sampler ?? genOpts?.sampler
 })
 
 /**
