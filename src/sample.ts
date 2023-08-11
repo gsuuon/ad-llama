@@ -1,11 +1,13 @@
 import { NDArray, Instance } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
+/** @internal */
 export type DeviceNDArray = {
   host: 'dev'
   data: NDArray
 }
 
+/** @internal */
 export type CpuNDArray = {
   host: 'cpu'
   data: NDArray
@@ -29,12 +31,14 @@ type CreateSamplerSelector = (priorCompletion: string, stops: string[]) => Sampl
 type CreateSamplerTemplate = (model: Model) => CreateSamplerSelector
 
 
+/** @internal */
 export type Sampler = (
   cpuLogits: CpuNDArray,
   tokens: number[],
   completion: string
 ) => number
 
+/** @internal */
 export type CreateSampler = (
   priorCompletion: string,
   stops: string[],
@@ -42,12 +46,14 @@ export type CreateSampler = (
   top_p: number
 ) => Sampler
 
+/** @internal */
 export type Model = {
   tvm: Instance
   tokenizer: Tokenizer
   sample: (logits: CpuNDArray, temperature: number, top_p: number) => number
 }
 
+/** @internal */
 export type Bias = {
   prefer: (templateSampler: CreateSamplerTemplate, weight: number) => CreateSampler
   avoid: (templateSampler: CreateSamplerTemplate, weight: number) => CreateSampler
@@ -55,6 +61,7 @@ export type Bias = {
   reject: (templateSampler: CreateSamplerTemplate) => CreateSampler
 }
 
+/** @internal */
 export const buildBias = (model: Model): Bias => {
   const { tvm, sample } = model
 
@@ -132,7 +139,7 @@ export const buildBias = (model: Model): Bias => {
   }
 }
 
-export const arrayStartsWith = <T>(starts: T[], xs: T[]) => {
+const arrayStartsWith = <T>(starts: T[], xs: T[]) => {
   for (let i = 0; i < starts.length; i++) {
     if (starts[i] !== xs[i]) {
       return false
@@ -142,7 +149,7 @@ export const arrayStartsWith = <T>(starts: T[], xs: T[]) => {
   return true
 }
 
-/// Gets the tokens for extension given existing text. Can fail to produce tokens.
+/** Gets the tokens for extension given existing text. Can fail to produce tokens. */
 const encodeExtension = (tokenizer: Tokenizer, text: string, extension: string) => {
   const textTokens = tokenizer.encode(text)
   const lastToken = textTokens[textTokens.length - 1]
@@ -160,13 +167,30 @@ const encodeExtension = (tokenizer: Tokenizer, text: string, extension: string) 
   }
 }
 
-export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: string): SamplerSelector => {
+/**
+ * A template sampler creator where each sample has logits modified depending on the tokens which are still relevant given the already sampled tokens. For use with {@link LoadedModel}
+ *
+ * @remarks
+ * For example, if we have `oneOf(['ranger', 'wizard'])` and we've already sampled 'w', the only next relevant tokens would be from 'izard'. If you want `oneOf` to stop at one of the choices, include the stop character (by default the next character after the expression), eg: `oneOf(['ranger"', 'wizard"'])`.
+ *
+ * @see {@link Bias}
+ *
+ * @example
+ * ```
+ * template`{
+ *   "weapon": "${a('special weapon', {
+ *     sampler: bias.prefer(oneOf(['Nun-chucks', 'Beam Cannon']), 10),
+ *   })}"
+ * }`
+ * ```
+ */
+export const oneOf: (items: string[]) => CreateSamplerTemplate = items => model => priorCompletion => {
   const encoded = items.map(
     item => {
       const extEncoding = encodeExtension(model.tokenizer, priorCompletion, item)
 
       if (extEncoding === undefined) {
-        console.error('Failed to generate extension tokens, ignoring', item)
+        console.warn('Failed to generate extension tokens, ignoring', item)
         return []
       }
 
@@ -176,8 +200,9 @@ export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: st
 
   return (_logits, tokens, _completions) => {
     const filtered = encoded.filter(item => arrayStartsWith(tokens, item) && item.length > tokens.length)
-    const nextRelevantTokens = filtered.map(x => x[tokens.length] )
-    console.log({
+    const nextRelevantTokens = filtered.map(x => x[tokens.length])
+
+    console.debug('oneOf', {
       nextRelevantTokens,
       nextRelevantChars: nextRelevantTokens.map(x => model.tokenizer.decode(new Int32Array([x]))),
       filtered,
@@ -191,6 +216,11 @@ export const oneOf = (items: string[]) => (model: Model) => (priorCompletion: st
   }
 }
 
+/**
+ * A template sampler creator for classes of characters.
+ *
+ * Each sample will have the same token logits modified based on the given relevant tokens. So in `consistsOf(['a','b'])`, every sample will have tokens for 'a' and 'b' modified.
+ */
 export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletion: string, endings: string[]): SamplerSelector => {
   const encodedTokens = chars.map(
     char => {
@@ -226,8 +256,11 @@ export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletio
 
   const encoded = Array.from(new Set(encodedTokens))
 
-  return () => {
-    console.log({
+  return (_, tokens, completion) => {
+    console.debug('consistsOf', {
+      tokens: [...tokens],
+      tokensChars: model.tokenizer.decode(new Int32Array(tokens)),
+      completion,
       consistsOfTokens: encoded,
       consistsOfChars: encoded.map(x => model.tokenizer.decode(new Int32Array([x])))
     })
