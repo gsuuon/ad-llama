@@ -139,6 +139,7 @@ type CreateTemplate = {
   template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => Template
   a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
   __: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  ref: (id: string) => string | undefined
 }
 
 /**
@@ -160,7 +161,9 @@ type CreateTemplateContext = (system: string, preprompt?: string, config?: Templ
  */
 export const ad = (model: LoadedModel): CreateTemplateContext => {
   // TODO additional model configuration and context-local state goes here
-  return (system: string, preprompt?: string, config?: TemplateExpressionOptions): CreateTemplate => ({
+  let refs: Record<string, string> = {}
+
+  return (system: string, preprompt?: string, config?: Omit<TemplateExpressionOptions, 'id'>): CreateTemplate => ({
     template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => {
       const [head, tail] = [literals[0], literals.slice(1)]
 
@@ -207,7 +210,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
               })
               return completion + op
             } else {
-              return completion + await model.generate(
+              const generated = await model.generate(
                 op.prompt,
                 completion,
                 [op.stop, ...(op.options?.stops ?? [])],
@@ -216,6 +219,12 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
                   ...mergeAdModelGenConfig(config, op.options)
                 }
               )
+
+              if (op.options?.id !== undefined) {
+                refs[op.options.id] = generated
+              }
+
+              return completion + generated
             }
           }, Promise.resolve(head))
         },
@@ -228,6 +237,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
       options,
     }),
     __: (prompt: string, options?: TemplateExpressionOptions) => ({ prompt, options }),
+    ref: id => refs[id]
   })
 }
 
