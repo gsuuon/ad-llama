@@ -161,10 +161,10 @@ type CreateTemplateContext = (system: string, preprompt?: string, config?: Templ
  */
 export const ad = (model: LoadedModel): CreateTemplateContext => {
   // TODO additional model configuration and context-local state goes here
-  let refs: Record<string, string> = {}
 
   return (system: string, preprompt?: string, config?: Omit<TemplateExpressionOptions, 'id'>): CreateTemplate => ({
     template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => {
+      let refs: Record<string, string> = {}
       const [head, tail] = [literals[0], literals.slice(1)]
 
       let ops: Op[] = []
@@ -176,57 +176,87 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
         ops.push(tail[i])
       }
 
-      return {
-        collect: async (stream?: GenerationStreamHandler) => {
-          await model.setContext(system, preprompt)
+      const collect = async (stream?: GenerationStreamHandler) => {
+        await model.setContext(system, preprompt)
 
-          if (stream) {
-            stream({
-              content: ops.reduce<string>( (completion, op) => {
-                if (typeof(op) === 'string') {
-                  return completion + op
-                } else {
-                  return completion + `\${'${op.prompt}'}`
-                }
-              }, head),
-              type: 'template',
-              system,
-              preprompt
-            })
+        if (stream) {
+          stream({
+            content: ops.reduce<string>( (completion, op) => {
+              if (typeof(op) === 'string') {
+                return completion + op
+              } else {
+                return completion + `\${'${op.prompt}'}`
+              }
+            }, head),
+            type: 'template',
+            system,
+            preprompt
+          })
 
-            stream({
-              content: head,
+          stream({
+            content: head,
+            type: 'lit'
+          })
+        }
+
+        return ops.reduce<Promise<string>>(async (completion_, op) => {
+          const completion = await completion_
+
+          // const opType = typeof(op)
+
+          if (typeof(op) === 'string') {
+            stream?.({
+              content: op,
               type: 'lit'
             })
-          }
+            return completion + op
+          } else if (typeof(op) === 'function' ) {
+            const op_ = asOp(op(ref))
 
-          return ops.reduce<Promise<string>>(async (completion_, op) => {
-            const completion = await completion_
-
-            if (typeof(op) === 'string') {
-              stream?.({
-                content: op,
-                type: 'lit'
-              })
-              return completion + op
-            } else {
-              const generated = await model.generate(
-                op.prompt,
-                completion,
-                [op.stop, ...(op.options?.stops ?? [])],
-                {
-                  stream,
-                  ...mergeAdModelGenConfig(config, op.options)
-                }
-              )
-
-              if (op.options?.id !== undefined) {
-                refs[op.options.id] = generated
+            const generated = await model.generate(
+              op_.prompt,
+              completion,
+              [op_.stop, ...(op_.options?.stops ?? [])],
+              {
+                stream,
+                ...mergeAdModelGenConfig(config, op_.options)
               }
+            )
 
-              return completion + generated
+            if (op_.options?.id !== undefined) {
+              refs[op_.options.id] = generated
             }
-          }, Promise.resolve(head))
+
+            return completion + generated
+          } else {
+            const generated = await model.generate(
+              op.prompt,
+              completion,
+              [op.stop, ...(op.options?.stops ?? [])],
+              {
+                stream,
+                ...mergeAdModelGenConfig(config, op.options)
+              }
+            )
+
+            if (op.options?.id !== undefined) {
+              refs[op.options.id] = generated
+            }
+
+            return completion + generated
+          }
+        }, Promise.resolve(head))
+      }
+
+      return {
+        collect,
+        collect_refs: async (stream?: GenerationStreamHandler) => {
+          const completion = await collect(stream)
+
+          return {
+            completion,
+            refs
+          }
         },
         model
       }
