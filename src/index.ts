@@ -88,20 +88,60 @@ if (import.meta.hot) {
   import.meta.hot.accept()
 }
 
-const asOp = (expr: TemplateExpression, nextLiteral: string) => ({
-  ...(typeof(expr) === 'string' ? {prompt: expr} : expr ),
-  stop: nextLiteral.slice(0, 1) // determine stop from the next literal after expression
-    // NOTE this isn't going to tokenize correctly necessarily
-    // we will need to decode and then string compare
-    // there are always multiple ways to encode the same bit of string depending on what's before and after
-})
-
 type Op = string | {
   prompt: string
   stop: string
   options?: TemplateExpressionOptions
+} | {
+  refExpr: WithRef<TemplateExpression>
+  stop: string
 }
 
+const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLiteral: string): Op => {
+  const stop = nextLiteral.slice(0, 1)
+
+  switch (typeof expr) {
+    case 'function':
+      return {
+        refExpr: expr,
+        stop
+      }
+    case 'string':
+      return {
+        prompt: expr,
+        stop
+      }
+    default:
+      return {
+        ...expr,
+        stop
+      }
+  }
+}
+
+const expandIfRefOp = (op: Exclude<Op, string>, ref: (id: string) => string | undefined): {
+  prompt: string,
+  options?: TemplateExpressionOptions,
+  stop: string
+} => {
+  if ('refExpr' in op) {
+    const expr = op.refExpr(ref)
+
+    if (typeof expr === 'string') {
+      return {
+        prompt: expr,
+        stop: op.stop
+      }
+    } 
+
+    return {
+      ...expr,
+      stop: op.stop
+    }
+  }
+
+  return op
+}
 
 const mergeAdModelGenConfig = (exprOpts?: TemplateExpressionOptions, genOpts?: GenerateOptions): CommonOptions => ({
   maxTokens: exprOpts?.maxTokens ?? genOpts?.maxTokens,
@@ -115,10 +155,10 @@ const mergeAdModelGenConfig = (exprOpts?: TemplateExpressionOptions, genOpts?: G
  * A defined template ready for inferencing
  */
 type Template = {
-  /**
-   * Collect the template as a string - optionally with a streaming handler
-   */
+  /** Collect the template as a string - optionally with a streaming handler */
   collect: (stream?: GenerationStreamHandler) => Promise<string>
+  /** Like collect but returns the completion and refs */
+  collect_refs: (stream?: GenerationStreamHandler) => Promise<{completion: string, refs: Record<string, string>}>
   model: LoadedModel // TODO refactor to just cancel() -- this is only used to cancel the underlying model
 }
 
@@ -136,10 +176,13 @@ type Template = {
  * ```
  */
 type CreateTemplate = {
-  template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => Template
+  /** tag function which creates a template ready to inference */
+  template: (
+    literals: TemplateStringsArray,
+    ...expressions: (TemplateExpression|WithRef<TemplateExpression>)[]
+  ) => Template
   a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
   __: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-  ref: (id: string) => string | undefined
 }
 
 /**
@@ -149,6 +192,8 @@ type CreateTemplate = {
  * Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates.
  */
 type CreateTemplateContext = (system: string, preprompt?: string, config?: TemplateExpressionOptions) => CreateTemplate
+
+type WithRef<T> = (ref: (id: string) => string | undefined) => T
 
 /**
  * Create an ad-llama instance
@@ -163,8 +208,10 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
   // TODO additional model configuration and context-local state goes here
 
   return (system: string, preprompt?: string, config?: Omit<TemplateExpressionOptions, 'id'>): CreateTemplate => ({
-    template: (literals: TemplateStringsArray, ...expressions: TemplateExpression[]) => {
+    template: (literals, ...expressions) => {
       let refs: Record<string, string> = {}
+      const ref = (id: string): string | undefined => refs[id]
+
       const [head, tail] = [literals[0], literals.slice(1)]
 
       let ops: Op[] = []
@@ -185,7 +232,13 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
               if (typeof(op) === 'string') {
                 return completion + op
               } else {
-                return completion + `\${'${op.prompt}'}`
+                if ('refExpr' in op) {
+                  const expr = op.refExpr(x => `(ref: ${x})`)
+                  console.log('template refExpr', {expr})
+                  return completion + `\${'${typeof expr === 'string' ? expr : expr.prompt}'}`
+                } else {
+                  return completion + `\${'${op.prompt}'}`
+                }
               }
             }, head),
             type: 'template',
@@ -202,45 +255,27 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
         return ops.reduce<Promise<string>>(async (completion_, op) => {
           const completion = await completion_
 
-          // const opType = typeof(op)
-
           if (typeof(op) === 'string') {
             stream?.({
               content: op,
               type: 'lit'
             })
             return completion + op
-          } else if (typeof(op) === 'function' ) {
-            const op_ = asOp(op(ref))
-
-            const generated = await model.generate(
-              op_.prompt,
-              completion,
-              [op_.stop, ...(op_.options?.stops ?? [])],
-              {
-                stream,
-                ...mergeAdModelGenConfig(config, op_.options)
-              }
-            )
-
-            if (op_.options?.id !== undefined) {
-              refs[op_.options.id] = generated
-            }
-
-            return completion + generated
           } else {
+            const { options, prompt, stop } = expandIfRefOp(op, ref)
+
             const generated = await model.generate(
-              op.prompt,
+              prompt,
               completion,
-              [op.stop, ...(op.options?.stops ?? [])],
+              [stop, ...(options?.stops ?? [])],
               {
                 stream,
-                ...mergeAdModelGenConfig(config, op.options)
+                ...mergeAdModelGenConfig(config, options)
               }
             )
 
-            if (op.options?.id !== undefined) {
-              refs[op.options.id] = generated
+            if (options?.id !== undefined) {
+              refs[options.id] = generated
             }
 
             return completion + generated
@@ -266,8 +301,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
       prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
       options,
     }),
-    __: (prompt: string, options?: TemplateExpressionOptions) => ({ prompt, options }),
-    ref: id => refs[id]
+    __: (prompt: string, options?: TemplateExpressionOptions) => ({ prompt, options })
   })
 }
 
