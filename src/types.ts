@@ -58,6 +58,7 @@ export type GenerateOptions = {
 export type TemplateExpressionOptions = {
   preword?: string
   stops?: string[]
+  id?: string
 } & CommonOptions
 
 export type TemplateExpression = {
