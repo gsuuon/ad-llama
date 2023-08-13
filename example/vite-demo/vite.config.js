@@ -7,6 +7,7 @@ export default {
       input: {
         main: resolve(__dirname, 'index.html'),
         hn: resolve(__dirname, 'hn/index.html'),
+        mystery: resolve(__dirname, 'mystery/index.html'),
       }
     }
   }
