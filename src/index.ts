@@ -97,7 +97,7 @@ type Op = string | {
   stop: string
 }
 
-const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLiteral: string): Op => {
+const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLiteral: string): Op | string => {
   const stop = nextLiteral.slice(0, 1)
 
   switch (typeof expr) {
@@ -107,10 +107,7 @@ const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLitera
         stop
       }
     case 'string':
-      return {
-        prompt: expr,
-        stop
-      }
+      return expr
     default:
       return {
         ...expr,
