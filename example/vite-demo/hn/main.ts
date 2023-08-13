@@ -1,5 +1,5 @@
-import '../src/style.css'
-import { renderTemplate } from '../src/renderTemplate'
+import '../style.css'
+import { renderTemplate } from '../renderTemplate'
 import { TargetDevice, ad, loadModel, validate } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
