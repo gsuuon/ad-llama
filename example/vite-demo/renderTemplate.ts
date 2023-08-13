@@ -43,7 +43,7 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
 
           break
         case 'ungen':
-          for (let i = 1; i < partial.tokenCount; i++) {
+          for (let i = 0; i < partial.tokenCount; i++) {
             completionEl?.lastChild?.remove()
           }
           break
