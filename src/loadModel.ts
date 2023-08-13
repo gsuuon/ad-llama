@@ -432,7 +432,8 @@ export default async (
 
     if (options?.validate) {
       if (
-        options.validate.retries > 0
+        options.validate.retries
+        && options.validate.retries > 0
         && options.validate.check
         && !options.validate.check(accepted.completion)
       ) {

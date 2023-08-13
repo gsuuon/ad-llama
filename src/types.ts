@@ -46,7 +46,7 @@ export type CommonOptions = {
   validate?: {
     check?: (partial: string) => boolean
     transform?: (partial: string) => string
-    retries: number
+    retries?: number
   }
   sampler?: CreateSampler
 }
