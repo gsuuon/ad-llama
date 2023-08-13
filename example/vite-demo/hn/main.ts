@@ -6,7 +6,7 @@ if (import.meta.hot) { import.meta.hot.accept() }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
-const hnApiGetRandomWhosHiring = async (tries = 2) => {
+const hnApiGetRandomWhosHiring = async (tries = 2): Promise<string> => {
   const whosHiringPostRes = await fetch('https://hacker-news.firebaseio.com/v0/item/36956867.json')
   const whosHiring = await whosHiringPostRes.json()
   const random = Math.floor(Math.random() * whosHiring.kids.length)
