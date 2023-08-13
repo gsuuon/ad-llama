@@ -1,0 +1,9 @@
+@import "../style.css";
+
+li p.summary {
+  font-weight: bold;
+}
+
+li p.secret {
+  font-style: italic;
+}
