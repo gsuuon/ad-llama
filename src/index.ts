@@ -154,7 +154,7 @@ const mergeAdModelGenConfig = (exprOpts?: TemplateExpressionOptions, genOpts?: G
 /**
  * A defined template ready for inferencing
  */
-type Template = {
+export type Template = {
   /** Collect the template as a string - optionally with a streaming handler */
   collect: (stream?: GenerationStreamHandler) => Promise<string>
   /** Like collect but returns the completion and refs */
@@ -305,7 +305,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
   })
 }
 
-export { TargetDevice } from './types.js'
+export { TargetDevice, StreamPartial } from './types.js'
 
 export * as validate from './validate.js'
 export * as sample from './sample.js'
