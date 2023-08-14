@@ -401,7 +401,7 @@ export default async (
     const continueSampling = accepted.accept(nextToken) // will be false if our first char was a stop
 
     if (continueSampling) {
-      while (!(modelState === ModelState.Cancelling) && accepted.completion.length < maxTokens) {
+      while (!(modelState === ModelState.Cancelling) && accepted.tokens.length < maxTokens) {
         const tokens = accepted.tokens
 
         const stopDecodeTimer = perf.timer('decode')
