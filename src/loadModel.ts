@@ -32,7 +32,7 @@ const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) =
 
   for (let i = tokenDecodedText.length; i >= 0; i--) {
     for (const stop of stops) {
-      if (text.slice(0, text.length - i).endsWith(stop)) {
+      if (stop.length > 0 && text.slice(0, text.length - i).endsWith(stop)) {
         return text.length - i - stop.length
       }
     }
