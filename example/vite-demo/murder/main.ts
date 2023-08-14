@@ -1,13 +1,12 @@
 import './style.css'
 import { renderTemplate } from '../renderTemplate'
 import { TargetDevice, ad, loadModel, sample } from 'ad-llama'
+import { establishBackgroundAndCharacters } from './inferBackground'
+import checkpoint from './story_checkpoint.json'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
 const infer = document.querySelector<HTMLDivElement>('#infer')!
-const game = document.querySelector<HTMLDivElement>('#game')!
-
-const render = (el: HTMLElement, html: string) => el.innerHTML = html
 
 const model = await loadModel(
   'Llama-2-7b-chat-hf-q4f32_1',
@@ -17,128 +16,92 @@ const model = await loadModel(
     : TargetDevice.CPU
 )
 
+// const { characters, background, scene } = await establishBackgroundAndCharacters(model)
+const { characters, background, scene } = checkpoint
+console.log({ characters, background, scene })
+
 const createCtx = ad(model)
 
 const { bias } = model
-const { consistsOf } = sample
+const { consistsOf, oneOf } = sample
 
-// try to get a '\n' to stop at a paragraph
-// TODO sampler which starts preferring '\n' after a certain amount of tokens
-// for now we just retry if we got nothing
-const breakParagraph = {
-  sampler: bias.prefer(consistsOf(['\n']), 1.2),
-  stops: ['\n'],
-  validate: { check: (x: string) => x.length > 1, retries: 3 }
+const o = (parent: HTMLElement, children: HTMLElement[]) => {
+  parent.append(...children)
+  return parent
 }
 
-const backgroundInf = await renderTemplate(infer, async () => {
-  const { template, a, __ } = createCtx('You are a text RPG game runner for a murder-mystery game.')
+const el = (tag: string, fn?: (el: any) => void) => {
+  const e = document.createElement(tag)
+  fn?.(e)
+  return e
+}
 
-  return template`
-  {
-    "setting": "${__('Describe the world in which this game is set', {
-      ...breakParagraph,
-      id: 'setting',
-      maxTokens: 750,
-      validate: { check: x => x.length > 50, retries: 3 }, // sometimes we just get 'Ravenwood'
-    })}",
-    "numCharacters": 3,
-    "characters": ["${a('list of the names of the non-player characters', {
-      sampler: bias.reject(consistsOf(['\n', '{'])),
-    })}]
-  }`
-})
+// const actionsEl = document.getElementById('actions')!
+const actionsEl = document.getElementById('infer')!
+const getUserAction = (): Promise<string> => new Promise(resolve => {
+  const form = el('form') as HTMLFormElement
+  const submit = el('button', x => { x.type = 'submit'; x.innerText = '>'})
 
-const text = (body: string, className?: string) => {
-  const el = document.createElement('p')
-  if (className) {
-    el.className = className
+  form.onsubmit = (ev: any) => {
+    ev.preventDefault()
+    const value = ev.target[0].value
+
+    if (value) {
+      submit.remove()
+      resolve(value)
+    }
   }
-  el.textContent = body
-  return el
-}
 
-const background = JSON.parse(backgroundInf.completion)
-
-const characterNames: string[] = background.characters
-console.log({characterNames})
-
-render(game, `
-  <div id='scene'></div>
-  <h2>Setting</h2>
-  <p>${background.setting}</p>
-  <h2>Characters</h2>
-  <ul>
-    ${characterNames.map(name => `<li id="${name}">${name}</li>`).join('')}
-  </ul>
-`)
-
-let characters: any[] = []
-for (const name of characterNames) {
-  const { template, a } = createCtx(
-    'You are a text RPG game runner for a murder-mystery game.',
-    `Setting:
-${background.setting}
-
-Non-player characters:
- - ${characterNames.join('\n - ')}
-`
-  )
-  // how do I put a literal string from previous?
-  const characterInference = await renderTemplate(infer, async () => template`{
-    "name": "${name}", 
-    "role": "${a('role for this non-player character - what is their place in this story?')}",
-    "description": "${a('description of this non-player character', {
-      maxTokens: 600,
-      ...breakParagraph
-    })}",
-    "secret": "${a('hidden secret about this character', breakParagraph)}",
-    "motivation": "${a('motivation of this character which may hint at their secret', breakParagraph)}",
-    "summary": "${a('one sentence summary of the character containing only publically known information about them', {stops:['.']})}"
-  }`)
-
-  const character = JSON.parse(characterInference.completion)
-  characters.push(character)
-
-  const charEl =document.getElementById(name)!
-  charEl.textContent = charEl.textContent + ' - ' + character.role
-
-  charEl.append(
-    text(character.summary, 'summary'),
-    text(character.description),
-    text('Motivation: ' + character.motivation),
-    text(character.secret, 'secret')
-  )
-}
-
-console.log({characters})
-
-const sceneInf = await renderTemplate(infer, async () => {
-  const { template, a } = createCtx(
-    'You are a text RPG game runner for a murder-mystery game.',
-    `Setting:
-${background.setting}
-
-Non-player characters:
- - ${characters.map(char => char.summary).join('\n - ')}
-
-Set the scene for where the player currently is.
-`
-  )
-
-  return template`{
-  "description": "${a('description of the current scene', breakParagraph)}",
-  "characters": ["${a('list of the names of the non-player characters present which the player could talk to')}]
-}`
+  actionsEl.prepend(o(
+    form,
+    [
+      el('label', x => x.innerText = 'action'),
+      el('input', x => x.type = 'text'),
+      submit
+    ]
+  ))
 })
 
-const scene = JSON.parse(sceneInf.completion)
+const { template, a } = createCtx(
+  'You are a text RPG game runner for a murder-mystery game.',
+  'Setting:\n'
+  + background.setting
+  + '\nNon-player characters:n'
+  + characters.map(char => `${char.name} -- ${char.summary}`).join('\n - ')
+)
 
-render(document.getElementById('scene')!, `
-  <h2>Scene</h2>
-  <p>${scene.description}</p>
-  <h4>People present:</h4>
-  <ul>
-    ${scene.characters.map((name: string) => `<li id="${name}">${name}</li>`).join('')}
-  </ul>
-`)
+while (true) {
+  // const playerAction_ = await getUserAction()
+  const playerAction_ = 'I walk up to Emily and ask, "What do you make of this case?"'
+
+  const playerAction = playerAction_.replace(/"/g, '\\"')
+
+  const action: {
+    playerAction: string,
+    relevantCharacters: string[],
+    actionType: string
+  } = JSON.parse(await renderTemplate(infer, async () => template`{
+    "playerAction": "${playerAction}",
+    "relevantCharacters": [${a('list of zero or more names of the most relevant non-player characters given the player action', { sampler: bias.reject(consistsOf(['\n', '{']))})}],
+    "actionType": "${a('type for the action', {sampler: bias.accept(oneOf(['talk', 'move', 'attack', 'act']))})}"
+  }`, false))
+
+  const relevantChars = action.relevantCharacters.map((name: string) => characters.find(char => char.name.toLowerCase().includes(name.toLowerCase()))).filter(x => x !== undefined)
+
+  console.log({relevantChars})
+
+  const startToks = model.totalTokenCount
+
+  const step = await renderTemplate(infer, async () => template`
+Player: ${playerAction_}
+
+Narrator:
+${a('description of the results of what the player does. If an npc responds, respond as that character.', {
+stops: ['Player:'],
+maxTokens: 2000
+})}`, false)
+
+  console.info('step', {stepTokens: model.totalTokenCount - startToks})
+
+  break
+}
