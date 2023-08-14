@@ -2,7 +2,11 @@ import { Template, StreamPartial } from 'ad-llama'
 
 const render = (el: HTMLElement, html: string) => el.innerHTML = html
 
-export const renderTemplate = async (root: HTMLElement, createTemplateCompletion: () => Promise<Template>) => {
+export const renderTemplate = async (
+  root: HTMLElement,
+  createTemplateCompletion: () => Promise<Template>,
+  allowRedoCancel = true
+) => {
   const renderRedoButton = () => {
     const redoButton = document.createElement('button')
     redoButton.onclick = () => renderTemplate(root, createTemplateCompletion)
@@ -27,16 +31,20 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
              <pre><code>${partial.content}</code></pre>
              </details>
              <pre id='completion'><code></code></pre>
-             <div id='controls'><button id='cancel'>cancel</button></div>`
+             <div id='controls'></div>`
           )
 
-          const cancelButton = document.getElementById('cancel')!
-          cancelButton.onclick = () => {
-            template.model.cancel()
-            cancelButton.remove()
-            renderRedoButton()
+          if (allowRedoCancel) {
+            const cancelButton = document.createElement('button')
+            cancelButton.onclick = () => {
+              template.model.cancel()
+              cancelButton.remove()
+              renderRedoButton()
+            }
+            cancelButton.textContent = 'cancel'
+            cancelButton.style.display = 'block'
+            document.getElementById('controls')?.appendChild(cancelButton)
           }
-          cancelButton.style.display = 'block'
 
           completionEl = document.getElementById('completion')
           promptEl = document.getElementById('prompt')
@@ -64,13 +72,16 @@ export const renderTemplate = async (root: HTMLElement, createTemplateCompletion
 
   const template = await createTemplateCompletion()
 
-  const completionResult = await template.collect_refs(renderPartial(template))
+  const completionResult = await template.collect(renderPartial(template))
 
-  renderRedoButton()
-  document.getElementById('cancel')?.remove()
+  if (allowRedoCancel) {
+    renderRedoButton()
+    document.getElementById('cancel')?.remove()
+  }
 
   console.log(completionResult)
-  console.log(JSON.parse(completionResult.completion))
+
+  try { console.log(JSON.parse(completionResult)) } catch { }
 
   return completionResult
 }
