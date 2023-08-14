@@ -84,6 +84,7 @@ export type LoadedModel = {
   ) => Promise<string>
   cancel: () => Promise<void>
   bias: Bias
+  totalTokenCount: number
 } 
 
 /**
