@@ -302,7 +302,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
   })
 }
 
-export { TargetDevice, StreamPartial } from './types.js'
+export { TargetDevice, StreamPartial, LoadedModel } from './types.js'
 
 export * as validate from './validate.js'
 export * as sample from './sample.js'
