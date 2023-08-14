@@ -232,8 +232,8 @@ export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletio
       // start number char after that, we want single char number tokens that aren't BOS / subject to merge
 
       if (extEncoding === undefined) {
-        console.error('Failed to generate extension tokens, ignoring', char)
-        return []
+        console.warn(`Failed to generate extension token for \`${char}\` using simple encoding`)
+        return Array.from(model.tokenizer.encode(char))
       }
 
       if (endings.length > 0) {
