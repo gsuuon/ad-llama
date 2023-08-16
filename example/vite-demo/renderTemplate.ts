@@ -2,14 +2,14 @@ import { Template, StreamPartial } from 'ad-llama'
 
 const render = (el: HTMLElement, html: string) => el.innerHTML = html
 
-export const renderTemplate = async (
+export const renderTemplateRefs = async (
   root: HTMLElement,
   createTemplateCompletion: () => Promise<Template>,
   allowRedoCancel = true
 ) => {
   const renderRedoButton = () => {
     const redoButton = document.createElement('button')
-    redoButton.onclick = () => renderTemplate(root, createTemplateCompletion)
+    redoButton.onclick = () => renderTemplateRefs(root, createTemplateCompletion)
     redoButton.textContent = 'redo'
     document.getElementById('controls')?.appendChild(redoButton)
   }
@@ -72,7 +72,7 @@ export const renderTemplate = async (
 
   const template = await createTemplateCompletion()
 
-  const completionResult = await template.collect(renderPartial(template))
+  const completionResult = await template.collect_refs(renderPartial(template))
 
   if (allowRedoCancel) {
     renderRedoButton()
@@ -81,7 +81,13 @@ export const renderTemplate = async (
 
   console.log(completionResult)
 
-  try { console.log(JSON.parse(completionResult)) } catch { }
+  try { console.log(JSON.parse(completionResult.completion)) } catch { }
 
   return completionResult
 }
+
+export const renderTemplate = async (
+  root: HTMLElement,
+  createTemplateCompletion: () => Promise<Template>,
+  allowRedoCancel = true
+) => (await renderTemplateRefs(root, createTemplateCompletion, allowRedoCancel)).completion
