@@ -7,6 +7,7 @@ import { Compartment }  from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
 import placeholder from './placeholder'
 
+  // @ts-expect-error: unused here but available in eval
 const { ad, TargetDevice, loadModel, sample } = adLlama
 
 if (import.meta.hot) { import.meta.hot.accept() }
@@ -50,9 +51,10 @@ const model =
   )
 
 const run = async (code: string) => {
+  editorError.innerHTML = ''
   await model.cancel()
 
-  // @ts-expect-error: unused here but available in code
+  // @ts-expect-error: unused here but available in eval
   const createCtx = ad(model)
 
   renderTemplate(inference, async () => {
