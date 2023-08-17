@@ -38,7 +38,7 @@ For an example of more complicated usage including validation, retry logic and t
 ## Generation
 Each expression in the template literal is a new prompt and options. The prompt given for each expression is added to the system and preprompt established in context, and prior completion text (literal parts and as well as inferences) are added to the end of the LLM prompt as a partially completed assistant response (i.e. after [/INST]).
 
-Each template expression can be configured independently - you can set a different temperature, token count, max length and more. Check the `TemplateExpressionOptions` type in [./src/types.ts](https://github.com/gsuuon/ad-llama/tree/main/src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed. If you don't need to set expression options at all, just put a string in the expression.
+Each template expression can be configured independently - you can set a different temperature, token count, max length and more. Check the `TemplateExpressionOptions` type in [./src/types.ts](https://github.com/gsuuon/ad-llama/tree/main/src/types.ts) for all options. `a` adds the preword to the expression prompt (by default "Generate a"), you can use `__` to provide a naked prompt or configure the preword as needed.
 
 ```typescript
 template`{
@@ -46,7 +46,7 @@ template`{
     maxTokens: 1000,
     stops: ['\n']
   })}",
-  "class": "${'a primary class for the character'}"
+  "class": "${a('a primary class for the character')}"
 }`
 ```
 
