@@ -18,9 +18,9 @@ renderTemplate(app, async () => {
         : TargetDevice.CPU 
     )
 
-  const gen = ad(model)
+  const createCtx = ad(model)
 
-  const { template, a } = gen(
+  const { template, a } = createCtx(
     'You are a dungeon master.',
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
