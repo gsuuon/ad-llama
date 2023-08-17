@@ -6,13 +6,13 @@
 }
 
 .header h2 {
-  margin: 0 1rem;
+  margin: 0;
 }
 
 div.outer {
   display: flex;
   flex-direction: row;
-  max-width: 100%;
+  width: 100%;
 }
 
 div#inference {
@@ -48,4 +48,19 @@ button#submit {
 
 div#editor-error {
   color: red;
+}
+
+@media(orientation: portrait) {
+  div.outer {
+    flex-direction: column;
+  }
+
+  .cm-editor {
+    resize: vertical;
+    width: auto !important;
+  }
+
+  div#playground, div#inference {
+    margin: 1rem;
+  }
 }
