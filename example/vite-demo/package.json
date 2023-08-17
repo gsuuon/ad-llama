@@ -13,6 +13,8 @@
     "vite": "^4.4.5"
   },
   "dependencies": {
-    "ad-llama": "file:../.."
+    "ad-llama": "file:../..",
+    "@codemirror/lang-javascript": "^6.1.9",
+    "codemirror": "^6.0.1"
   }
 }
