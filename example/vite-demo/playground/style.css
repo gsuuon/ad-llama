@@ -1,0 +1,51 @@
+@import '../style.css';
+
+.header {
+  margin: 1rem 0;
+  margin-top: 0;
+}
+
+.header h2 {
+  margin: 0 1rem;
+}
+
+div.outer {
+  display: flex;
+  flex-direction: row;
+  max-width: 100%;
+}
+
+div#inference {
+  margin: 1rem;
+  margin-left: .5rem;
+}
+
+div#playground {
+  display: flex;
+  flex-direction: column;
+  margin: 1rem;
+  margin-right: .5rem;
+}
+
+div.header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+button#submit {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.cm-editor {
+  width: 35rem;
+  background: cornsilk;
+  resize: both;
+  overflow: hidden;
+}
+
+div#editor-error {
+  color: red;
+}

@@ -8,6 +8,7 @@ export default {
         main: resolve(__dirname, 'index.html'),
         hn: resolve(__dirname, 'hn/index.html'),
         mystery: resolve(__dirname, 'mystery/index.html'),
+        playground: resolve(__dirname, 'playground/index.html')
       }
     }
   }
