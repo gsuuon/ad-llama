@@ -26,10 +26,10 @@ export const renderTemplateRefs = async (
 
           render(
             root,
-            `<div id='prompt'><p>${staticPrompt}</p></div>
-             <details><summary>template</summary>
+            `<details><summary>template</summary>
              <pre><code>${partial.content}</code></pre>
              </details>
+             <div id='prompt'><p>${staticPrompt}</p></div>
              <pre id='completion'><code></code></pre>
              <div id='controls'></div>`
           )
@@ -41,6 +41,7 @@ export const renderTemplateRefs = async (
               cancelButton.remove()
               renderRedoButton()
             }
+            cancelButton.id = 'cancel'
             cancelButton.textContent = 'cancel'
             cancelButton.style.display = 'block'
             document.getElementById('controls')?.appendChild(cancelButton)
