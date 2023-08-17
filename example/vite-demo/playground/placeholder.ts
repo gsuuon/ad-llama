@@ -10,13 +10,18 @@ template\`{
   "class": "\${a('primary class for the character')}",
   "subclass": "\${a('subclass')}",
   "name": "\${(a('name'))}",
-  "weapon": "\${a('special weapon', { sampler: bias.prefer(oneOf(['Nun-chucks', 'Beam Cannon']), 10) })}",
+  "weapon": "\${a('special weapon')}",
   "description": "\${(a('clever description', {
     maxTokens: 1000,
     stops: ['\\n'],
-    sampler: bias.prefer(consistsOf(['\\n']), 1.2)
+    sampler: bias.prefer(consistsOf(['\\n']), 1.2),
+    validate: {
+      check: x => x.length > 10
+    }
   }))}",
-  "age": \${a('age', {
+  "height": "\${a('height')}",
+  "appearance": "\${a('description of their appearance')}",
+  "age": \${__('Generate an age', {
     sampler: bias.accept(chars.number),
     maxTokens: 3
   })},
