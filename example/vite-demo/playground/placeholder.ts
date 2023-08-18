@@ -1,13 +1,15 @@
 export default `const { template, a, __ } = createCtx(
   'You are a dungeon master.',
-  'Create an interesting character based on the Dungeons and Dragons universe.'
+  'Create an interesting non-player character based on the Dungeons and Dragons universe.'
 )
+
+const classes = [ 'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard' ]
 
 const { bias } = model
 const { oneOf, consistsOf, chars } = sample
 
 template\`{
-  "class": "\${a('main class')}",
+  "class": "\${a('main class', { sampler: bias.accept(oneOf(classes)) })}",
   "subclass": "\${a('sub class')}",
   "name": "\${(a('name'))}",
   "weapon": "\${a('special weapon')}",
@@ -22,8 +24,8 @@ template\`{
   "heightInCm": \${a('height in cm', {
     sampler: bias.accept(chars.number)
   })},
-  "appearance": "\${a('description of their appearance')}",
-  "age": \${__('Generate an age', {
+  "appearance": "\${a('description of the character\\'s appearance')}",
+  "age": \${a('fitting age', {
     sampler: bias.accept(chars.number),
     maxTokens: 3
   })},
