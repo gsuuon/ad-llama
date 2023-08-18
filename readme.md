@@ -4,7 +4,7 @@
 Use tagged template literals for structured Llama 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. 
 
 
-https://github.com/gsuuon/ad-llama/assets/6422188/54fed226-c29b-44d6-a797-cc39a4e5a5d1
+https://github.com/gsuuon/ad-llama/assets/6422188/d38ef8c3-8ba1-4757-a992-ea8720776780
 
 
 Check out the [playground](https://ad-llama.vercel.app/playground/) or a static [demo](https://ad-llama.vercel.app/). There's also a [documentation](https://gsuuon.github.io/ad-llama/) page --
