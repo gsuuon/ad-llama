@@ -20,7 +20,7 @@ template\`{
       retries: 2
     }
   }))}",
-  "height": "\${a('height')}",
+  "height": "\${a('height in cm')}",
   "appearance": "\${a('description of their appearance')}",
   "age": \${__('Generate an age', {
     sampler: bias.accept(chars.number),
