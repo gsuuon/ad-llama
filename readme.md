@@ -1,13 +1,14 @@
 # ad-llama 🦙
 
 
-Use tagged template literals for structured Llama 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. Check [example/vite-demo](https://github.com/gsuuon/ad-llama/tree/main/example/vite-demo) for an example or https://ad-llama.vercel.app/ for a live demo.
+Use tagged template literals for structured Llama 2 inference locally in browser via [mlc-llm](https://github.com/mlc-ai/mlc-llm). Runs on Chromium browsers with WebGPU support. 
 
 
 https://github.com/gsuuon/ad-llama/assets/6422188/54fed226-c29b-44d6-a797-cc39a4e5a5d1
 
 
-[doc reference](https://gsuuon.github.io/ad-llama/) | say hi in [discord](https://discord.gg/Jag2h3fS4C)!
+Check out the [playground](https://ad-llama.vercel.app/playground/) or a static [demo](https://ad-llama.vercel.app/). There's also a [documentation](https://gsuuon.github.io/ad-llama/) page --
+say hi in [discord](https://discord.gg/Jag2h3fS4C)!
 
 # Usage
 `npm install -S ad-llama`

@@ -38,13 +38,11 @@ renderTemplate(app, async () => {
   "description": "${(a('clever description', {
     maxTokens: 1000,
     stops: ['\n'],
-    sampler: bias.avoid(consistsOf(['\n']), 1.3)
+    sampler: bias.avoid(consistsOf(['\n']), 1.2)
   }))}",
   "age": ${a('age', {
     sampler: bias.accept(chars.number),
-    maxTokens: 3,
-    temperature: 1.01,
-    top_p: 0.99
+    maxTokens: 3
   })},
   "items": [
     {

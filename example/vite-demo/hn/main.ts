@@ -27,7 +27,7 @@ const hnApiGetRandomWhosHiring = async (tries = 2): Promise<string> => {
 }
 
 renderTemplate(app, async () => {
-  const gen = ad(
+  const createCtx = ad(
     await loadModel(
       'Llama-2-7b-chat-hf-q4f32_1',
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
@@ -39,7 +39,7 @@ renderTemplate(app, async () => {
 
   const listing = await hnApiGetRandomWhosHiring()
 
-  const { template, a, __ } = gen(
+  const { template, a, __ } = createCtx(
     'You are a helpful assistant that catalogues job listings. Fill the next field in the following JSON object. For any requests for which there is not sufficient information based on the listing itself, fill the field with the string "NA".',
     `\nThe listing:\n"""\n${listing}\n"""\n`,
     {
