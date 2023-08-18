@@ -14,7 +14,6 @@ template\`{
   "description": "\${(a('clever description', {
     maxTokens: 1000,
     stops: ['\\n'],
-    sampler: bias.prefer(consistsOf(['\\n']), 1.2),
     validate: {
       check: x => x.length > 10,
       retries: 2
