@@ -41,9 +41,9 @@ button#submit {
 
 .cm-editor {
   width: 35rem;
-  background: cornsilk;
   resize: both;
   overflow: hidden;
+  background: #343542;
 }
 
 div#editor-error {
@@ -62,5 +62,19 @@ div#editor-error {
 
   div#playground, div#inference {
     margin: 1rem;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .cm-editor {
+    background-color: cornsilk;
+  }
+
+  .cm-editor .cm-gutters {
+    background-color: antiquewhite;
+  }
+
+  .cm-gutterElement.cm-activeLineGutter {
+    background-color: thistle;
   }
 }

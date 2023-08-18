@@ -13,8 +13,9 @@
     "vite": "^4.4.5"
   },
   "dependencies": {
-    "ad-llama": "file:../..",
     "@codemirror/lang-javascript": "^6.1.9",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "ad-llama": "file:../..",
     "codemirror": "^6.0.1"
   }
 }

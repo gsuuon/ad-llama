@@ -1,11 +1,15 @@
 import './style.css'
+
 import 'ad-llama' // prevent rollup treeshake
 import * as adLlama from 'ad-llama'
-import { renderTemplate } from '../renderTemplate'
+
 import { basicSetup, EditorView } from 'codemirror'
 import { Compartment }  from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
+import { oneDark } from '@codemirror/theme-one-dark'
+
 import placeholder from './placeholder'
+import { renderTemplate } from '../renderTemplate'
 
   // @ts-expect-error: unused here but available in eval
 const { ad, TargetDevice, loadModel, sample } = adLlama
@@ -27,6 +31,7 @@ const view = new EditorView({
     basicSetup,
     EditorView.lineWrapping,
     language.of(javascript()),
+    oneDark
   ],
   parent: editor
 })
