@@ -1,6 +1,5 @@
 import './style.css'
 
-import 'ad-llama' // prevent rollup treeshake
 import * as adLlama from 'ad-llama'
 
 import { basicSetup, EditorView } from 'codemirror'

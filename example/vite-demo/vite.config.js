@@ -9,7 +9,22 @@ export default {
         hn: resolve(__dirname, 'hn/index.html'),
         murder: resolve(__dirname, 'murder/index.html'),
         playground: resolve(__dirname, 'playground/index.html')
-      }
+      },
+      plugins: [
+        {
+          name: 'disable-treeshake-playground',
+          transform(code, id) {
+            if (/playground\/main.ts/.test(id)) {
+              return {
+                code,
+                map: null,
+                moduleSideEffects: 'no-treeshake'
+              }
+            }
+            return null
+          }
+        }
+      ]
     }
   }
 }
