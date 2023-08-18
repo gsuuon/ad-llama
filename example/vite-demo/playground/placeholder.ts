@@ -16,7 +16,8 @@ template\`{
     stops: ['\\n'],
     sampler: bias.prefer(consistsOf(['\\n']), 1.2),
     validate: {
-      check: x => x.length > 10
+      check: x => x.length > 10,
+      retries: 2
     }
   }))}",
   "height": "\${a('height')}",
