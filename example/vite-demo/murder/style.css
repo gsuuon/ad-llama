@@ -1,0 +1,18 @@
+@import "../style.css";
+
+body {
+  padding: 1rem;
+}
+
+li p.summary {
+  font-weight: bold;
+}
+
+li p.secret {
+  font-style: italic;
+}
+
+input {
+  margin: .5rem 1rem;
+  padding: 0.45rem;
+}

@@ -46,7 +46,7 @@ export type CommonOptions = {
   validate?: {
     check?: (partial: string) => boolean
     transform?: (partial: string) => string
-    retries: number
+    retries?: number
   }
   sampler?: CreateSampler
 }
@@ -84,6 +84,7 @@ export type LoadedModel = {
   ) => Promise<string>
   cancel: () => Promise<void>
   bias: Bias
+  totalTokenCount: number
 } 
 
 /**

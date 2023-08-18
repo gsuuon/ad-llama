@@ -32,59 +32,13 @@ const getStopIndex = (text: string, tokenDecodedText: string, stops: string[]) =
 
   for (let i = tokenDecodedText.length; i >= 0; i--) {
     for (const stop of stops) {
-      if (text.slice(0, text.length - i).endsWith(stop)) {
+      if (stop.length > 0 && text.slice(0, text.length - i).endsWith(stop)) {
         return text.length - i - stop.length
       }
     }
   }
 
   return -1
-}
-
-const acceptTokenInference = (
-  tokenizer: Tokenizer,
-  stops: string[],
-  prompt: string,
-  stream?: GenerationStreamHandler
-) => {
-  let tokens: number[] = []
-  let completion = ''
-
-  return {
-    accept: (token: number) => {
-      tokens.push(token)
-
-      const updatedText = tokenizer.decode(new Int32Array(tokens))
-      const tokenDecodedText = updatedText.slice(completion.length)
-
-      const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
-
-      if (stopIdx !== -1) {
-        const acceptedCompleteText = updatedText.slice(0, stopIdx)
-
-        stream?.({
-          content: acceptedCompleteText.slice(completion.length),
-          type: 'gen',
-          prompt
-        })
-
-        completion = acceptedCompleteText
-
-        return false
-      }
-
-      stream?.({
-        content: tokenDecodedText,
-        type: 'gen',
-        prompt
-      })
-
-      completion = updatedText
-      return true
-    },
-    get completion() { return completion },
-    get tokens() { return tokens }
-  }
 }
 
 const perf = (() => {
@@ -238,6 +192,12 @@ export default async (
     tvm.getParamsFromCache('param', -1)
   )
 
+  const getMetadata = vm.getFunction('get_metadata')
+  const metadata = JSON.parse(tvm.detachFromCurrentScope(getMetadata()).toString())
+
+  console.info({metadata})
+  const stopTokens: number[] = metadata.stop_tokens
+
   const createKvCache = vm.getFunction('create_kv_cache')
 
   const clearKvCaches = tvm.detachFromCurrentScope(
@@ -352,12 +312,70 @@ export default async (
 
   let modelState: ModelState = ModelState.Waiting
   let system_ = '<<sys>>You are a helpful assistant<</sys>>\n\n'
-  let preprompt_ = '[INST]';
+  let preprompt_ = '[INST]'
+
+  let totalTokenCount = 0
 
   const unfill = () => {
     clearKvCaches(kvCache)
     filledKvCacheLength = 0
   }
+
+  const acceptTokenInference = (
+    tokenizer: Tokenizer,
+    stops: string[],
+    prompt: string,
+    stream?: GenerationStreamHandler
+  ) => {
+    let tokens: number[] = []
+    let completion = ''
+
+    return {
+      accept: (token: number) => {
+        tokens.push(token)
+        totalTokenCount += 1
+
+        if (stopTokens.includes(token)) {
+          console.info('stop token', token, {
+            tokens,
+            completion
+          })
+          return false
+        }
+
+        const updatedText = tokenizer.decode(new Int32Array(tokens))
+        const tokenDecodedText = updatedText.slice(completion.length)
+
+        const stopIdx = getStopIndex(updatedText, tokenDecodedText, stops)
+
+        if (stopIdx !== -1) {
+          const acceptedCompleteText = updatedText.slice(0, stopIdx)
+
+          stream?.({
+            content: acceptedCompleteText.slice(completion.length),
+            type: 'gen',
+            prompt
+          })
+
+          completion = acceptedCompleteText
+
+          return false
+        }
+
+        stream?.({
+          content: tokenDecodedText,
+          type: 'gen',
+          prompt
+        })
+
+        completion = updatedText
+        return true
+      },
+      get completion() { return completion },
+      get tokens() { return tokens }
+    }
+  }
+
 
   const generate = async (
     prompt: string,
@@ -401,7 +419,7 @@ export default async (
     const continueSampling = accepted.accept(nextToken) // will be false if our first char was a stop
 
     if (continueSampling) {
-      while (!(modelState === ModelState.Cancelling) && accepted.completion.length < maxTokens) {
+      while (!(modelState === ModelState.Cancelling) && accepted.tokens.length < maxTokens) {
         const tokens = accepted.tokens
 
         const stopDecodeTimer = perf.timer('decode')
@@ -418,6 +436,10 @@ export default async (
           break
         }
       }
+
+      console.info('generate', {
+        acceptedCount: accepted.tokens.length
+      })
     }
 
     // TODO eos token
@@ -432,7 +454,8 @@ export default async (
 
     if (options?.validate) {
       if (
-        options.validate.retries > 0
+        options.validate.retries
+        && options.validate.retries > 0
         && options.validate.check
         && !options.validate.check(accepted.completion)
       ) {
@@ -506,7 +529,8 @@ export default async (
           resolve()
         }
       }, 16))
-    }
+    },
+    get totalTokenCount() { return totalTokenCount }
   }
 }
 

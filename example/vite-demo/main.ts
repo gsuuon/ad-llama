@@ -18,9 +18,9 @@ renderTemplate(app, async () => {
         : TargetDevice.CPU 
     )
 
-  const gen = ad(model)
+  const createCtx = ad(model)
 
-  const { template, a } = gen(
+  const { template, a } = createCtx(
     'You are a dungeon master.',
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
@@ -38,13 +38,11 @@ renderTemplate(app, async () => {
   "description": "${(a('clever description', {
     maxTokens: 1000,
     stops: ['\n'],
-    sampler: bias.avoid(consistsOf(['\n']), 1.3)
+    sampler: bias.avoid(consistsOf(['\n']), 1.2)
   }))}",
   "age": ${a('age', {
     sampler: bias.accept(chars.number),
-    maxTokens: 3,
-    temperature: 1.01,
-    top_p: 0.99
+    maxTokens: 3
   })},
   "items": [
     {
