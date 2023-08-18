@@ -7,8 +7,8 @@ const { bias } = model
 const { oneOf, consistsOf, chars } = sample
 
 template\`{
-  "class": "\${a('primary class for the character')}",
-  "subclass": "\${a('subclass')}",
+  "class": "\${a('main class')}",
+  "subclass": "\${a('sub class')}",
   "name": "\${(a('name'))}",
   "weapon": "\${a('special weapon')}",
   "description": "\${(a('clever description', {
@@ -19,7 +19,9 @@ template\`{
       retries: 2
     }
   }))}",
-  "height": "\${a('height in cm')}",
+  "heightInCm": \${a('height in cm', {
+    sampler: bias.accept(chars.number)
+  })},
   "appearance": "\${a('description of their appearance')}",
   "age": \${__('Generate an age', {
     sampler: bias.accept(chars.number),
