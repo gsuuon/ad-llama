@@ -7,6 +7,7 @@ import type {
   TemplateExpression,
   GenerationStreamHandler,
   TemplateExpressionOptions,
+  TemplateContextOptions,
 } from './types.js'
 
 import { TargetDevice } from './types.js'
@@ -97,7 +98,11 @@ type Op = string | {
   stop: string
 }
 
-const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLiteral: string): Op | string => {
+const asOp = (
+  expr: TemplateExpression | WithRef<TemplateExpression>,
+  nextLiteral: string,
+  configPreword: string
+): Op | string => {
   const stop = nextLiteral.slice(0, 1)
 
   switch (typeof expr) {
@@ -109,8 +114,11 @@ const asOp = (expr: TemplateExpression | WithRef<TemplateExpression>, nextLitera
     case 'string':
       return expr
     default:
+      const preword = expr.preword ?? configPreword
+
       return {
         ...expr,
+        prompt: preword === '' ? expr.prompt : preword + ' a ' + expr.prompt,
         stop
       }
   }
@@ -160,35 +168,35 @@ export type Template = {
 }
 
 /**
- * Template creation and helpers
+ * Template creator with context established
  *
  * @example
  * ```
- * const createContext = ad(model)
- * const { template, a } = createContext('You are a Dungeon master', 'Create an interesting NPC')
+ * const { context, a } = ad(model)
+ * const dm = context('You are a Dungeon master', 'Create an interesting NPC')
  *
- * const npc = template`{
+ * const npc = dm`{
  *  "name": "${a('character name')}"
  * }`
  * ```
  */
-type CreateTemplate = {
-  /** tag function which creates a template ready to inference */
-  template: (
+type CreateTemplateContext =
+  (
     literals: TemplateStringsArray,
     ...expressions: (TemplateExpression|WithRef<TemplateExpression>)[]
   ) => Template
-  a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-  __: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-}
 
 /**
- * Establish a context for template inference
- *
- * @remarks
- * Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates.
+ * Template context creator and template creation helpers
  */
-type CreateTemplateContext = (system: string, preprompt?: string, config?: TemplateExpressionOptions) => CreateTemplate
+type CreateTemplate = {
+  /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
+  context: (system: string, preprompt?: string, config?: TemplateExpressionOptions) => CreateTemplateContext
+  /** A template expression with the preword prepended to the prompt - defaults to 'Generate' */
+  a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  /** A template expression with an unaltered prompt */
+  prompt: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+}
 
 type WithRef<T> = (ref: (id: string) => string | undefined) => T
 
@@ -201,11 +209,20 @@ type WithRef<T> = (ref: (id: string) => string | undefined) => T
  * const createContext = ad(await loadModel('Llama-2-7b-chat-hf-q4f32_1'))
  * ```
  */
-export const ad = (model: LoadedModel): CreateTemplateContext => {
+export const ad = (model: LoadedModel): CreateTemplate => {
   // TODO additional model configuration and context-local state goes here
 
-  return (system: string, preprompt?: string, config?: Omit<TemplateExpressionOptions, 'id'>): CreateTemplate => ({
-    template: (literals, ...expressions) => {
+  return {
+    a: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+      prompt,
+      options,
+    }),
+    prompt: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+      prompt,
+      options,
+      preword: '',
+    }),
+    context: (system: string, preprompt?: string, config?: TemplateContextOptions): CreateTemplateContext =>(literals, ...expressions) => {
       let refs: Record<string, string> = {}
       const ref = (id: string): string | undefined => refs[id]
 
@@ -216,7 +233,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
       // We make an assumption here that there is always one more literal than expression
       // Chrome seems to uphold this (template literal with only expression gets 2 empty strings)
       for (let i = 0; i < tail.length; i++) {
-        ops.push(asOp(expressions[i], tail[i]))
+        ops.push(asOp(expressions[i], tail[i], config?.preword || 'Generate'))
         ops.push(tail[i])
       }
 
@@ -293,13 +310,7 @@ export const ad = (model: LoadedModel): CreateTemplateContext => {
         model
       }
     },
-    a: (prompt: string, options?: TemplateExpressionOptions) => ({
-      // TODO should I merge AdExprConfig from context here instead of within generate?
-      prompt: `${config?.preword ?? 'Generate'} a ${prompt}`,
-      options,
-    }),
-    __: (prompt: string, options?: TemplateExpressionOptions) => ({ prompt, options })
-  })
+  }
 }
 
 export { TargetDevice, StreamPartial, LoadedModel } from './types.js'
