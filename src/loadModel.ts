@@ -436,10 +436,6 @@ export default async (
           break
         }
       }
-
-      console.info('generate', {
-        acceptedCount: accepted.tokens.length
-      })
     }
 
     // TODO eos token
@@ -497,6 +493,11 @@ export default async (
     }
 
     perf.summarize()
+
+    console.info('generate', prompt, {
+      acceptedCount: accepted.tokens.length,
+      completion: accepted.completion
+    })
 
     return accepted.completion
   }
