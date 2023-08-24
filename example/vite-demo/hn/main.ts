@@ -27,7 +27,7 @@ const hnApiGetRandomWhosHiring = async (tries = 2): Promise<string> => {
 }
 
 renderTemplate(app, async () => {
-  const createCtx = ad(
+  const { context, a, prompt } = ad(
     await loadModel(
       'Llama-2-7b-chat-hf-q4f32_1',
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
@@ -39,7 +39,7 @@ renderTemplate(app, async () => {
 
   const listing = await hnApiGetRandomWhosHiring()
 
-  const { template, a, __ } = createCtx(
+  const assistant = context(
     'You are a helpful assistant that catalogues job listings. Fill the next field in the following JSON object. For any requests for which there is not sufficient information based on the listing itself, fill the field with the string "NA".',
     `\nThe listing:\n"""\n${listing}\n"""\n`,
     {
@@ -57,7 +57,7 @@ renderTemplate(app, async () => {
     stops: [' ', '\n']
   }
 
-  return template`{
+  return assistant`{
   "company": {
     "name": "${a('name for the company')}",
     "description": "${a('description for the company')}",
@@ -82,13 +82,13 @@ renderTemplate(app, async () => {
   },
   "skills": ["${a('list of skills')}],
   "remote": {
-    "allowed": ${__('true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
+    "allowed": ${prompt('true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
       stops: ['}',' ','\n'],
       validate: {
         check: validate.json.bool,
         retries: 2
       }
     })},
-    "info": "${__('Any additional information about remote work at the company.')}"
+    "info": "${prompt('Any additional information about remote work at the company.')}"
   }
 }`})
