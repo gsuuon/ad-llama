@@ -20,7 +20,7 @@ const { characters, background, scene } = await establishBackgroundAndCharacters
 // const { characters, background, scene } = checkpoint
 console.log({ characters, background, scene })
 
-const createCtx = ad(model)
+const { context, a, prompt } = ad(model)
 
 const { bias } = model
 const { consistsOf, oneOf } = sample
@@ -62,7 +62,7 @@ const showAndWaitUserInput = (): Promise<string> => new Promise(resolve => {
   ))
 })
 
-const { template: storyRunner, __, a } = createCtx(
+const storyRunner = context(
   'You are a story generator.',
   '\nSetting:\n'
   + background.setting
@@ -76,7 +76,7 @@ const findNpc = (name: string) => characters.find(char => char.name.toLowerCase(
 type PlayerActionType = "interactNpc" | "generalAction"
 
 const parseInputType = async (input: string) => {
-  const { template, a } = createCtx(
+  const decideInput = context(
     'You are a text role-playing game runner.', `
 Player input: ${input}
 
@@ -86,7 +86,7 @@ Choose which type of action the player input is:
 `, { preword: 'What is' })
 
   return JSON.parse(await renderTemplate(infer, async () =>
-    template`"${a('type for the action given the player input?', {
+    decideInput`"${a('type for the action given the player input?', {
       sampler: bias.accept(oneOf(['interactNpc"', 'generalAction"'])),
       temperature: 0.2
     })}"`, false)) as PlayerActionType
@@ -102,7 +102,7 @@ type CharacterAction = {
 `
 
 const parseNarration = async (narration: string, knownCharacters: string[], relevantCharacter?: string) => {
-  const { template, __ } = createCtx(
+  const narrated = context(
     'You are a story generator.',
     '\nNarration: """\n'
     + narration
@@ -111,8 +111,8 @@ const parseNarration = async (narration: string, knownCharacters: string[], rele
   )
 
   const character: string =
-    relevantCharacter ?? JSON.parse(await renderTemplate(infer, async () => template`"${
-      __(
+    relevantCharacter ?? JSON.parse(await renderTemplate(infer, async () => narrated`"${
+      prompt(
         'Among these characters:\n'
         + characters.map(char => ` - ${char.name} -- ${char.summary}`).join('\n')
         + '\n\nWhich character is this narration about?',
@@ -126,9 +126,9 @@ const parseNarration = async (narration: string, knownCharacters: string[], rele
   console.log({relevantCharacters: character})
 
   const actions = JSON.parse(await renderTemplate(infer, async() =>
-    template`[
+    narrated`[
   {
-    "${__(`What is a list of actions of type CharacterAction that the character ${character} took?\n${characterActionDefinition}`, {
+    "${prompt(`What is a list of actions of type CharacterAction that the character ${character} took?\n${characterActionDefinition}`, {
         sampler: bias.prefer(consistsOf(['}']), 1.3), // try to get an ending } without ,
         temperature: 0.2
       })}]`
@@ -145,7 +145,7 @@ const stepInteractNpc = async (playerInput: string) => {
     actionType: string
   } = JSON.parse(await renderTemplate(infer, async () => storyRunner`{
     "playerInput": ${JSON.stringify(playerInput)},
-    "primaryNpc": "${__('Who is the primary character the action is directed to?', {
+    "primaryNpc": "${prompt('Who is the primary character the action is directed to?', {
       sampler: bias.accept(oneOf(characters.map(c => c.name))),
       temperature: 0.2
   })}"
@@ -161,7 +161,7 @@ ${relevantNpc.secret}` : ''
   const step = await renderTemplateRefs(infer, async () => storyRunner`
 [Player] ${action.playerInput}
 
-[${relevantNpc!.name}] ${__(
+[${relevantNpc!.name}] ${prompt(
 npcDescription + '\nGenerate a narration of what the character does in response to the player. Stick to a third person perspective.',
 { id: 'narration', stops: ['['] }
 )}`, false)

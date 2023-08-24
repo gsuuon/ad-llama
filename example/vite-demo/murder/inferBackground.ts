@@ -9,7 +9,7 @@ const render = (el: HTMLElement, html: string) => el.innerHTML = html
 
 export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
   const { bias } = model
-  const createCtx = ad(model)
+  const { context, a } = ad(model)
 
   const breakParagraph = {
     // try to get a '\n' to stop at a paragraph
@@ -34,21 +34,23 @@ export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
     numCharacters: number,
     characters: string[]
   } = JSON.parse(
-    await renderTemplate(infer, async () => {
-      const { template, a } = createCtx('You are a text RPG game runner for a murder-mystery game.')
-
-      return template`{
+    await renderTemplate(infer, async () =>
+      context('You are a text RPG game runner for a mystery game.')`{
         "setting": "${a('description of the world in which this game is set', {
-        ...breakParagraph,
-        maxTokens: 750,
-        validate: { check: x => x.length > 50, retries: 3 }, // sometimes we just get 'Ravenwood'
+          sampler: bias.reject(consistsOf([' Ravenswood', 'Ravenswood', 'Ravns Wood'])),
+          maxTokens: 750,
+          validate: {
+            check: x => { return x.length > 50 },
+            retries: 3,
+            transform: x => x.replace(/\n/g, '\\n')
+          }, // sometimes we just get 'Ravenswood'
         })}",
         "numCharacters": 3,
-        "characters": ["${a('list of the names of the non-player characters', {
-        sampler: bias.reject(consistsOf(['\n', '{'])),
+        "characters": ["${a('list of the full (first and last) names of the non-player characters', {
+          sampler: bias.reject(consistsOf(['\n', '{'])),
         })}]
        }`
-    }, false)
+    , false)
   )
 
   const characterNames: string[] = background.characters
@@ -74,7 +76,7 @@ export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
   }[] = []
 
   for (const name of characterNames) {
-    const { template, a } = createCtx(
+    const gameWithSetting = context(
       'You are a text RPG game runner for a murder-mystery game.',
       'Setting:\n'
       + background.setting
@@ -83,7 +85,7 @@ export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
       + '\n\n'
     )
 
-    const character = JSON.parse(await renderTemplate(infer, async () => template`{
+    const character = JSON.parse(await renderTemplate(infer, async () => gameWithSetting`{
       "name": "${name}", 
       "role": "${a('role for this non-player character - what is their place in this story?')}",
       "description": "${a('description of this non-player character', {
@@ -114,7 +116,7 @@ export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
     description: string,
     characters: string[]
   } = JSON.parse(await renderTemplate(infer, async () => {
-    const { template, a } = createCtx(
+    const gameRunner = context(
       'You are a text RPG game runner for a murder-mystery game.',
       'Setting:\n'
       + background.setting
@@ -122,7 +124,7 @@ export const establishBackgroundAndCharacters = async (model: LoadedModel) => {
       + characters.map(char => char.summary).join('\n - ')
       + '\nSet the scene for where the player currently is:')
 
-    return template`{
+    return gameRunner`{
       "description": "${a('description of the current scene', breakParagraph)}",
       "characters": ["${a('list of the names of the non-player characters present which the player could talk to')}]
     }`
