@@ -191,7 +191,7 @@ type CreateTemplateContext =
  */
 type CreateTemplate = {
   /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
-  context: (system: string, preprompt?: string, config?: TemplateExpressionOptions) => CreateTemplateContext
+  context: (system: string, preprompt?: string, config?: TemplateContextOptions) => CreateTemplateContext
   /** A template expression with the preword prepended to the prompt - defaults to 'Generate' */
   a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
   /** A template expression with an unaltered prompt */
