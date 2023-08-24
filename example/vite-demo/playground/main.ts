@@ -36,10 +36,8 @@ const view = new EditorView({
 })
 
 const editorContainer = document.querySelector('div.cm-editor') as HTMLDivElement
-console.log({editorContainer})
 
 const onresize = new ResizeObserver( () => {
-  console.log('resize')
   view.requestMeasure()
 })
 
