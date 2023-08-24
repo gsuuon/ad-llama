@@ -18,7 +18,7 @@ import type {
 enum ModelState {
   Waiting,
   Running,
-  Cancelling,
+  Cancelling
 }
 
 const scope = (name?: string) => 'ad-llama' + name ? '/' + name : ''
@@ -506,7 +506,15 @@ export default async (
   updateReport({ ready: true })
 
   return {
-    generate,
+    generate: async (prompt, priorCompletion, stops, options?) => {
+      try {
+        return await generate(prompt, priorCompletion, stops, options)
+      } catch (e) {
+        unfill()
+        modelState = ModelState.Waiting
+        throw e
+      }
+    },
     bias,
     setContext: async (system: string, preprompt?: string) => {
       system_ = `<<sys>>${system}<</sys>>\n\n`
