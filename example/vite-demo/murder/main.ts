@@ -40,6 +40,8 @@ const showAndWaitUserInput = (): Promise<string> => new Promise(resolve => {
   const form = el('form') as HTMLFormElement
   const submit = el('button', x => { x.type = 'submit'; x.innerText = '>'})
 
+  form.className = 'action'
+
   form.onsubmit = (ev: any) => {
     ev.preventDefault()
     const value = ev.target[0].value
