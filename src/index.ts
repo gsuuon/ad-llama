@@ -234,7 +234,8 @@ type WithRef<T> = (ref: (id: string) => string | undefined) => T
  * @example
  * ```
  * import { ad, loadModel } from 'ad-llama'
- * const createContext = ad(await loadModel('Llama-2-7b-chat-hf-q4f32_1'))
+ *
+ * const { context, a, prompt } = ad(await loadModel('Llama-2-7b-chat-hf-q4f32_1'))
  * ```
  */
 export const ad = (model: LoadedModel): CreateTemplate => {

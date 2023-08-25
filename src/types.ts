@@ -76,7 +76,7 @@ export type TemplateExpression = {
  *
  * @example
  * ```
- * const createContext = ad(loadedModel)
+ * const { context, a, prompt } = ad(loadedModel)
  * ```
  */
 export type LoadedModel = {
