@@ -14,24 +14,33 @@ say hi in [discord](https://discord.gg/Jag2h3fS4C)!
 `npm install -S ad-llama`
 
 ```javascript
-import { loadModel, ad } from 'ad-llama'
+import { loadModel, ad, report } from 'ad-llama'
 
-const loadedModel = await loadModel('Llama-2-7b-chat-hf-q4f32_1')
-const createContext = ad(loadedModel)
+const loadedModel = await loadModel('Llama-2-7b-chat-hf-q4f32_1', report(console.info))
+const { context, a } = ad(loadedModel)
 
-const { template, a } = createContext(
+const dm = context(
   'You are a dungeon master.',
   'Create an NPC based on the Dungeons and Dragons universe.'
 )
 
-const npc = template`{
+const npc = dm`{
   "description": "${a('short description')}",
   "name": "${a('character name')}",
   "weapon": "${a('weapon')}",
   "class": "${a('primary class')}"
 }`
 
-console.log(await npc.collect())
+const generatedNpc = await npc.collect(partial => {
+  switch (partial.type) {
+    case 'gen':
+    case 'lit':
+      console.info(partial.content)
+      break
+  }
+})
+
+console.log(generatedNpc)
 ```
 
 For an example of more complicated usage including validation, retry logic and transforms check the hackernews [who's hiring example.](https://github.com/gsuuon/ad-llama/tree/main/example/vite-demo/hn/main.ts)
