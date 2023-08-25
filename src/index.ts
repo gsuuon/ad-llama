@@ -84,6 +84,34 @@ export const loadModel = async (
   }
 }
 
+const keys = <T extends Object>(o: T) => Object.keys(o) as (keyof T)[]
+
+export const report = (log: (text: string) => void) => {
+  let lastReport: LoadReport | undefined;
+
+  const _log = (label: string, value: any) => {
+    const valueStr = value instanceof Object ? '\n' + JSON.stringify(value, null, 2) : value
+
+    log(`${label}: ${valueStr}`)
+  }
+
+  return (report: LoadReport) => {
+    if (lastReport !== undefined) {
+      for (const label of keys(lastReport)) {
+        if (lastReport[label] !== report[label]) {
+          _log(label, report[label])
+        }
+      }
+    } else {
+      for (const label of keys(report)) {
+        _log(label, report[label])
+      }
+    }
+
+    lastReport = report
+  }
+}
+
 /// <reference types="vite/client" />
 if (import.meta.hot) {
   import.meta.hot.accept()
@@ -313,7 +341,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
   }
 }
 
-export { TargetDevice, StreamPartial, LoadedModel } from './types.js'
+export { TargetDevice, StreamPartial, LoadedModel, GenerationStreamHandler } from './types.js'
 
 export * as validate from './validate.js'
 export * as sample from './sample.js'
