@@ -1,6 +1,6 @@
 import '../style.css'
 import { renderTemplate } from '../renderTemplate'
-import { TargetDevice, ad, loadModel, validate } from 'ad-llama'
+import { TargetDevice, ad, loadModel, validate, sample, TemplateExpressionOptions } from 'ad-llama'
 
 if (import.meta.hot) { import.meta.hot.accept() }
 
@@ -23,72 +23,72 @@ const hnApiGetRandomWhosHiring = async (tries = 2): Promise<string> => {
     return await hnApiGetRandomWhosHiring(tries - 1)
   }
 
+  console.log({
+    link: `https://news.ycombinator.com/item?id=${hnListing.id}`,
+    date: new Date(hnListing.time * 1000)
+  })
+
   return text
 }
 
-renderTemplate(app, async () => {
-  const { context, a, prompt } = ad(
-    await loadModel(
-      'Llama-2-7b-chat-hf-q4f32_1',
-      report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
-      new URLSearchParams(window.location.search).get('cpu') === null
-        ? TargetDevice.GPU
-        : TargetDevice.CPU 
-    )
+const result = await renderTemplate(app, async () => {
+  const model = await loadModel(
+    'Llama-2-7b-chat-hf-q4f32_1',
+    report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
+    new URLSearchParams(window.location.search).get('cpu') === null
+      ? TargetDevice.GPU
+      : TargetDevice.CPU 
   )
+
+  const { context, the, a, prompt } = ad(model)
+  const { bias } = model
+  const { oneOf, chars } = sample
 
   const listing = await hnApiGetRandomWhosHiring()
 
   const assistant = context(
-    'You are a helpful assistant that catalogues job listings. Fill the next field in the following JSON object. For any requests for which there is not sufficient information based on the listing itself, fill the field with the string "NA".',
+    'You are a helpful assistant that summarizes job listing into structured data. Fill the next field in the given JSON string based on following listing.',
     `\nThe listing:\n"""\n${listing}\n"""\n`,
-    {
-      preword: 'What is',
-      temperature: 0.3
-    }
+    { temperature: 0.25 }
   )
 
-  const asNumber = {
+  const asComp: TemplateExpressionOptions = {
+    sampler: bias.accept(chars.number),
+    temperature: 0.1
+  }
+
+  const asStringList: TemplateExpressionOptions = {
+    sampler: bias.accept(oneOf(['"', ']'])), // start off with a quote or end immediately
     validate: {
-      retries: 3,
-      check: validate.json.num,
-      transform: (x: string) => String(Number(x))
-    },
-    stops: [' ', '\n']
+      check: validate.json.list,
+      retries: 3
+    }
   }
 
   return assistant`{
   "company": {
-    "name": "${a('name for the company')}",
-    "description": "${a('description for the company')}",
-    "sector": "${a('sector that this company operates in')}",
-    "links": ["${a('list of additional links from the listing')}]
+    "name": "${the('name for the company')}",
+    "description": "${the('description for the company')}",
+    "sector": "${the('sector that this company operates in')}",
+    "links": ["${the('list of additional links from the listing')}]
   },
   "role": {
-    "primary": "${a('primary role')}",
-    "additionalRoles": [${a('list of any additional roles the listing may be hiring for', {
-      stops: ["NA", "{"],
-      validate: {
-        check: validate.json.list,
-        retries: 3
-      }
-    })}]
+    "primary": "${the('primary role')}",
+    "additionalRoles": [${the('list of any additional roles the listing may be hiring for', asStringList)}]
   },
-  "salary": {
-    "currency": "${a('currency label')}",
-    "info": "${'additional info about compensation, or "no information provided"'}",
-    "max": ${a('maximum salary amount based on the listing or 0 if no info', asNumber)},
-    "min": ${a('minimum salary amount based on the listing or 0 if no info', asNumber)}
+  "compensation": {
+    "currency": "${the('currency label')}",
+    "max": ${the('maximum compensation amount for the primary role. Based solely on the listing - fill with 0 if no info about the compensation amount was given.', asComp)},
+    "min": ${the('minimum compensation amount for the primary role based on the listing, or 0 if no info', asComp)}
+    "info": "${prompt('Any additional info about compensation, or "no information provided"')}",
   },
-  "skills": ["${a('list of skills')}],
+  "skills": [${a('list of specific skills mentioned in the listing', asStringList)}],
   "remote": {
-    "allowed": ${prompt('true if remote is allowed for this listing, else false. If the listing says ONSITE, that means remote is not allowed.', {
-      stops: ['}',' ','\n'],
-      validate: {
-        check: validate.json.bool,
-        retries: 2
-      }
+    "allowed": ${prompt('true if remote is allowed for this listing, else false. If the listing says onsite, that means remote is not allowed. If it says hybrid, that means remote is allowed but with limits', {
+      sampler: bias.accept(oneOf(['true', 'false']))
     })},
-    "info": "${prompt('Any additional information about remote work at the company.')}"
+    "info": "${prompt('Summarize all information in the listing related to remote work. Include information about geography or timezone. Mention if the listing says the company is fully remote or remote first.')}"
   }
 }`})
+
+try { console.log(JSON.parse(result)) } catch { }
