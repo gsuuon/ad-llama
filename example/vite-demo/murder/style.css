@@ -12,7 +12,26 @@ li p.secret {
   font-style: italic;
 }
 
-input {
+p {
+  white-space: pre-wrap;
+}
+
+form.action {
+  background: burlywood;
+  padding: 0.25rem .5rem;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+form.action input {
   margin: .5rem 1rem;
   padding: 0.45rem;
+  flex: 1 0;
+}
+
+@media (prefers-color-scheme: light) {
+  form.action {
+    background: cornsilk;
+  }
 }

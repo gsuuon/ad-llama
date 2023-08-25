@@ -36,10 +36,8 @@ const view = new EditorView({
 })
 
 const editorContainer = document.querySelector('div.cm-editor') as HTMLDivElement
-console.log({editorContainer})
 
 const onresize = new ResizeObserver( () => {
-  console.log('resize')
   view.requestMeasure()
 })
 
@@ -59,7 +57,7 @@ const run = async (code: string) => {
   await model.cancel()
 
   // @ts-expect-error: unused here but available in eval
-  const createCtx = ad(model)
+  const { context, a, prompt } = ad(model)
 
   renderTemplate(inference, async () => {
     try {

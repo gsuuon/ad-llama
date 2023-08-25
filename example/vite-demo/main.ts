@@ -18,9 +18,9 @@ renderTemplate(app, async () => {
         : TargetDevice.CPU 
     )
 
-  const createCtx = ad(model)
+  const { context, a } = ad(model)
 
-  const { template, a } = createCtx(
+  const dm = context(
     'You are a dungeon master.',
     'Create an interesting character based on the Dungeons and Dragons universe.'
   )
@@ -28,7 +28,7 @@ renderTemplate(app, async () => {
   const { bias } = model
   const { oneOf, consistsOf, chars } = sample
 
-  return template`{
+  return dm`{
   "class": "${a('primary class for the character', {
     sampler: bias.reject(oneOf(['Ranger', 'Rogue'].flatMap(alsoToLowerCase)))
   })}",

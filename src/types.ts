@@ -56,13 +56,18 @@ export type GenerateOptions = {
 } & CommonOptions
 
 export type TemplateExpressionOptions = {
-  preword?: string
   stops?: string[]
   id?: string
 } & CommonOptions
 
+export type TemplateContextOptions =
+  Omit<TemplateExpressionOptions, 'id'> & {
+  preword?: string
+}
+
 export type TemplateExpression = {
   prompt: string
+  preword?: string
   options?: TemplateExpressionOptions
 } | string
 
@@ -71,7 +76,7 @@ export type TemplateExpression = {
  *
  * @example
  * ```
- * const createContext = ad(loadedModel)
+ * const { context, a, prompt } = ad(loadedModel)
  * ```
  */
 export type LoadedModel = {
