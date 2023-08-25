@@ -216,13 +216,34 @@ type CreateTemplateContext =
 
 /**
  * Template context creator and template creation helpers
+ * @example
+ * ```ts
+ * const { context, a, prompt } = ad(model)
+ * const assistant = context('You are a helpful assistant')
+ *
+ * const template = assistant`{
+ *  "petName": "${a('good name for a cat')}",
+ *  "hairs": ${prompt('How many hairs does this cat have?')}
+ * }`
+ * ```
  */
 type CreateTemplate = {
   /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
   context: (system: string, preprompt?: string, config?: TemplateContextOptions) => CreateTemplateContext
-  /** A template expression with the preword prepended to the prompt - defaults to 'Generate' */
+  /**
+   * A template expression with the preword prepended to the prompt - defaults to 'Generate', which becomes 'Generate a'
+   * @example
+   * ```ts
+   * const { context, a } = ad(model)
+   * const assistant = context('You are a helpful assistant')
+   *
+   * const template = assistant`{
+   *  "petName": "${a('good name for a cat')}"
+   * }`
+   * ```
+   */
   a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-  /** A template expression with an unaltered prompt */
+  /** A template expression with an unaltered prompt - the preword is ignored */
   prompt: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
 }
 
