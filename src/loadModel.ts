@@ -56,9 +56,6 @@ const perf = (() => {
       }
     },
     get entries() { return entries },
-    get average() {
-      return 
-    },
     summarize: () => {
       const sums = Object.fromEntries(Object.entries(entries).map(
         ([label, results]) => [label, results.reduce((a,x) => a + x, 0) ]
@@ -449,27 +446,29 @@ export default async (
     modelState = ModelState.Waiting
 
     if (options?.validate) {
-      if (
-        options.validate.retries
-        && options.validate.retries > 0
-        && options.validate.check
-        && !options.validate.check(accepted.completion)
-      ) {
-        options?.stream?.({
-          type: 'ungen',
-          tokenCount: accepted.tokens.length,
-          content: accepted.completion
-        })
+      if (options.validate.check && !options.validate.check(accepted.completion)) {
+        if (options.validate.retries && options.validate.retries > 0) {
+          options?.stream?.({
+            type: 'ungen',
+            tokenCount: accepted.tokens.length,
+            content: accepted.completion
+          })
 
-        console.log({failedValidation: accepted.completion})
+          console.log({failedValidation: accepted.completion})
 
-        return await generate(prompt, priorCompletion, stops, {
-          ...options,
-          validate: {
-            ...options.validate,
-            retries: options.validate.retries - 1,
-          }
-        })
+          return await generate(prompt, priorCompletion, stops, {
+            ...options,
+            validate: {
+              ...options.validate,
+              retries: options.validate.retries - 1,
+            }
+          })
+        } else {
+          console.warn('Expression failed validation but ran out of retries', {
+            completion: accepted.completion,
+            retries: options.validate.retries ?? 0
+          })
+        }
       }
 
       if (options.validate.transform) {
