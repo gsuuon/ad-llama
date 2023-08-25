@@ -387,7 +387,8 @@ export {
   TargetDevice,
   StreamPartial,
   LoadedModel,
-  GenerationStreamHandler
+  GenerationStreamHandler,
+  TemplateExpressionOptions
 } from './types.js'
 
 export * as validate from './validate.js'
