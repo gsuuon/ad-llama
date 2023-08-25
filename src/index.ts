@@ -129,7 +129,7 @@ type Op = string | {
 const asOp = (
   expr: TemplateExpression | WithRef<TemplateExpression>,
   nextLiteral: string,
-  configPreword: string
+  configPreword?: string
 ): Op | string => {
   const stop = nextLiteral.slice(0, 1)
 
@@ -142,11 +142,19 @@ const asOp = (
     case 'string':
       return expr
     default:
-      const preword = expr.preword ?? configPreword
+      if (expr.preword === null) {
+        return { ...expr, stop }
+      }
+
+      const contextPreword = configPreword ?? (
+        expr.preword === 'a' ? 'Generate' :
+          expr.preword === 'the' ? 'What is' : 
+            ''
+      )
 
       return {
         ...expr,
-        prompt: preword === '' ? expr.prompt : preword + ' a ' + expr.prompt,
+        prompt: contextPreword + ' ' + expr.preword + ' ' + expr.prompt,
         stop
       }
   }
@@ -231,7 +239,8 @@ export type CreateTemplate = {
   /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
   context: (system: string, preprompt?: string, config?: TemplateContextOptions) => CreateTemplateContext
   /**
-   * A template expression with the preword prepended to the prompt - defaults to 'Generate', which becomes 'Generate a'
+   * A template expression with 'a' prefixed to the prompt along with the context preword (which defaults to  'Generate')
+   *
    * @example
    * ```ts
    * const { context, a } = ad(model)
@@ -241,9 +250,14 @@ export type CreateTemplate = {
    *  "petName": "${a('good name for a cat')}"
    * }`
    * ```
+   * The prompt in the expression will be "Generate a good name for a cat"
    */
   a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-  /** A template expression with an unaltered prompt - the preword is ignored */
+  /**
+   * Like {@link a} but with 'the' prefixed and defaults to 'What is' for the context preword
+   */
+  the: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  /** A template expression with an unaltered prompt - the context preword is ignored */
   prompt: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
 }
 
@@ -266,11 +280,17 @@ export const ad = (model: LoadedModel): CreateTemplate => {
     a: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
       prompt,
       options,
+      preword: 'a'
+    }),
+    the: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+      prompt,
+      options,
+      preword: 'the'
     }),
     prompt: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
       prompt,
       options,
-      preword: '',
+      preword: null,
     }),
     context: (system: string, preprompt?: string, config?: TemplateContextOptions): CreateTemplateContext =>(literals, ...expressions) => {
       let refs: Record<string, string> = {}
@@ -283,7 +303,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
       // We make an assumption here that there is always one more literal than expression
       // Chrome seems to uphold this (template literal with only expression gets 2 empty strings)
       for (let i = 0; i < tail.length; i++) {
-        ops.push(asOp(expressions[i], tail[i], config?.preword || 'Generate'))
+        ops.push(asOp(expressions[i], tail[i], config?.preword))
         ops.push(tail[i])
       }
 

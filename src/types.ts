@@ -67,7 +67,7 @@ export type TemplateContextOptions =
 
 export type TemplateExpression = {
   prompt: string
-  preword?: string
+  preword?: string | null
   options?: TemplateExpressionOptions
 } | string
 
