@@ -57,7 +57,7 @@ const run = async (code: string) => {
   await model.cancel()
 
   // @ts-expect-error: unused here but available in eval
-  const createCtx = ad(model)
+  const { context, a, prompt } = ad(model)
 
   renderTemplate(inference, async () => {
     try {

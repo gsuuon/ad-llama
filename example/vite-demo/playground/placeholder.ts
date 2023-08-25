@@ -1,14 +1,14 @@
 export default `const { bias } = model
 const { oneOf, consistsOf, chars } = sample
 
-const { template, a, __ } = createCtx(
+const dnd = context(
   'You are a dungeon master.',
   'Create an interesting non-player character based on the Dungeons and Dragons universe.'
 )
 
 const classes = [ 'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard' ]
 
-template\`{
+dnd\`{
   "class": "\${a('main class', { sampler: bias.accept(oneOf(classes)) })}",
   "subclass": "\${a('sub class')}",
   "name": "\${(a('name'))}",
