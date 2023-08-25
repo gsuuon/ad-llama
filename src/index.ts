@@ -227,7 +227,7 @@ type CreateTemplateContext =
  * }`
  * ```
  */
-type CreateTemplate = {
+export type CreateTemplate = {
   /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
   context: (system: string, preprompt?: string, config?: TemplateContextOptions) => CreateTemplateContext
   /**
@@ -363,7 +363,12 @@ export const ad = (model: LoadedModel): CreateTemplate => {
   }
 }
 
-export { TargetDevice, StreamPartial, LoadedModel, GenerationStreamHandler } from './types.js'
+export {
+  TargetDevice,
+  StreamPartial,
+  LoadedModel,
+  GenerationStreamHandler
+} from './types.js'
 
 export * as validate from './validate.js'
 export * as sample from './sample.js'
