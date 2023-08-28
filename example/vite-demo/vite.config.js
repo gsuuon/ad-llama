@@ -1,6 +1,8 @@
 import { resolve } from 'path'
+import { defineConfig } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
 
-export default {
+export default defineConfig({
   build: {
     target: 'esnext',
     rollupOptions: {
@@ -26,5 +28,6 @@ export default {
         }
       ]
     }
-  }
-}
+  },
+  plugins: [solidPlugin()]
+})
