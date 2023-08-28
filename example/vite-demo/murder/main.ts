@@ -1,7 +1,7 @@
 import './style.css'
 import { renderTemplate, renderTemplateRefs } from '../renderTemplate'
 import { TargetDevice, ad, loadModel, sample } from 'ad-llama'
-import { establishBackgroundAndCharacters } from './inferBackground'
+import { establishBackgroundAndCharacters } from './engine/background'
 // import checkpoint from './story_checkpoint.json'
 
 if (import.meta.hot) { import.meta.hot.accept() }
