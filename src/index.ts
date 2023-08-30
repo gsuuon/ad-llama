@@ -388,7 +388,8 @@ export {
   StreamPartial,
   LoadedModel,
   GenerationStreamHandler,
-  TemplateExpressionOptions
+  TemplateExpressionOptions,
+  LoadReport
 } from './types.js'
 
 export * as validate from './validate.js'
