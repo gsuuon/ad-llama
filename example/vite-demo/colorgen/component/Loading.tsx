@@ -61,7 +61,7 @@ export default function Loading({
     <div>
       <div>Model: {llamaModel}</div>
       <Show when={error() !== undefined}>
-        <div class='error'></div>
+        <div class='error'>Error: {error()}</div>
       </Show>
       <Show when={device() !== ''}>
         <div>Device: {device()}</div>
