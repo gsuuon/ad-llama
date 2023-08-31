@@ -2,8 +2,8 @@ import { For, JSX, Show, createSignal } from 'solid-js'
 import { Dynamic, render } from 'solid-js/web'
 import { CreateTemplate, LoadedModel, ad, sample } from 'ad-llama'
 
-import ShowInfer from './component/ShowInfer'
-import Loading from './component/Loading'
+import ShowInfer from './components/ShowInfer'
+import Loading from './components/Loading'
 
 type AppModel = {
   state: 'primary' // generate a primary color
