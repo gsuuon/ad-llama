@@ -7,7 +7,7 @@ Use tagged template literals for structured Llama 2 inference locally in browser
 https://github.com/gsuuon/ad-llama/assets/6422188/d38ef8c3-8ba1-4757-a992-ea8720776780
 
 
-Check out the [playground](https://ad-llama.vercel.app/playground/) or a static [demo](https://ad-llama.vercel.app/). There's also a [documentation](https://gsuuon.github.io/ad-llama/) page --
+Check out the [playground](https://ad-llama.vercel.app/playground/), a simple dnd [npc](https://ad-llama.vercel.app/) generator, or a multi-step [color](https://ad-llama.vercel.app/colorgen/) generator built on solid-js. There's also a [documentation](https://gsuuon.github.io/ad-llama/) page --
 say hi in [discord](https://discord.gg/Jag2h3fS4C)!
 
 # Usage
