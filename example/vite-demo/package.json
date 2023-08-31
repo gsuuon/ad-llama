@@ -10,12 +10,14 @@
   },
   "devDependencies": {
     "typescript": "^5.0.2",
-    "vite": "^4.4.5"
+    "vite": "^4.4.5",
+    "vite-plugin-solid": "^2.7.0"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.1.9",
     "@codemirror/theme-one-dark": "^6.1.2",
     "ad-llama": "file:../..",
-    "codemirror": "^6.0.1"
+    "codemirror": "^6.0.1",
+    "solid-js": "^1.7.11"
   }
 }
