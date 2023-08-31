@@ -1,4 +1,4 @@
-import { JSX, Show, createSignal } from 'solid-js'
+import { For, JSX, Show, createSignal } from 'solid-js'
 import { Dynamic, render } from 'solid-js/web'
 import { CreateTemplate, LoadedModel, ad, sample } from 'ad-llama'
 
@@ -6,12 +6,12 @@ import ShowInfer from './component/ShowInfer'
 import Loading from './component/Loading'
 
 type AppModel = {
-  state: 'primary'
+  state: 'primary' // generate a primary color
 } | {
-  state: 'hex'
+  state: 'hex' // generate a shade of that color as a hex
   primary: string
 } | {
-  state: 'show'
+  state: 'show' // show the color
   primary: string
   color: string
 }
@@ -25,13 +25,21 @@ type View = {
 const view: View = {
   show: ({ color, primary, update }) => {
     const size = '10rem'
+    const [showAgain, setShowAgain] = createSignal(true)
 
     return (
       <div style={`display: flex; flex-direction: column; align-items: center;`}>
         <h3>{color} is a shade of {primary}</h3>
         <div style={`width: ${size}; height: ${size}; background-color: #${color}`}>
         </div>
-        <button style={`margin: 2rem`} onClick={() => update({state: 'primary'})}>redo</button>
+        <Show
+          when={showAgain()}
+          >
+          <button style={`margin: 2rem`} onClick={() => {
+            setShowAgain(false)
+            update({state: 'primary'})
+          }}>again</button>
+        </Show>
       </div>
     )
   },
@@ -39,9 +47,13 @@ const view: View = {
     const assistant = context('You are a helpful coloring assistant.')
 
     const [hexColor] = createSignal(
-      assistant`#${a(`specific shade of ${primary} as a hex rgb value`, {
+      assistant`#${a(`shade of ${primary} as a hex rgb value`, {
         stops: ['\n', ' '],
         maxTokens: 6,
+        validate: {
+          retries: 10,
+          check: x => x.length === 6
+        },
         id: 'hex'
       })} `
     )
@@ -63,7 +75,7 @@ const view: View = {
     const assistant = context('You are a helpful coloring assistant.')
 
     const [pickPrimaryColor] = createSignal(
-      assistant`Color: ${prompt('pick a primary color', {
+      assistant`Color: ${prompt('pick a primary color between red, green or blue', {
         sampler: model.bias.accept(sample.oneOf(['red\n', 'green\n', 'blue\n'])),
         stops: ['\n'],
         id: 'color'
@@ -85,17 +97,23 @@ const view: View = {
 }
 
 const App = ({model}: {model: LoadedModel}) => {
-  const [appModel, setAppModel] = createSignal<AppModel>({state: 'primary'})
+  const [appModels, setAppModels] = createSignal<AppModel[]>([{state: 'primary'}])
 
   const createTemplate = ad(model)
 
-  return <Dynamic
-    component={view[appModel().state]}
-    update={setAppModel}
-    model={model}
-    {...appModel()}
-    {...createTemplate}
-  />
+  const setAppModel = (appModel: AppModel) => setAppModels([...appModels(), appModel])
+
+  return (
+    <For each={appModels()}>{appModel =>
+      <Dynamic
+        component={view[appModel.state]}
+        update={setAppModel}
+        model={model}
+        {...appModel}
+        {...createTemplate}
+      />
+    }</For>
+  )
 }
 
 const Load = () => {

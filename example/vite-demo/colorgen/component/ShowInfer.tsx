@@ -2,9 +2,10 @@ import '../../style.css'
 import { Template, StreamPartial } from 'ad-llama'
 import { Accessor, For, Show, createEffect, createSignal } from 'solid-js'
 
-export default function ShowInfer({ template, onComplete }: {
-  template: Accessor<Template>,
-  onComplete: (refs: any) => any;
+export default function ShowInfer({ template, onComplete, showTemplate }: {
+  showTemplate?: boolean
+  template: Accessor<Template>
+  onComplete: (refs: any) => any
 }) {
   const [canCancel, setCanCancel] = createSignal(true)
   const [prompt, setPrompt] = createSignal('')
@@ -42,9 +43,11 @@ export default function ShowInfer({ template, onComplete }: {
 
   return (
     <div>
-      <details><summary>template</summary>
-        <pre><code>{templateText()}</code></pre>
-      </details>
+      <Show when={showTemplate}>
+        <details><summary>template</summary>
+          <pre><code>{templateText()}</code></pre>
+        </details>
+      </Show>
       <div id='prompt'><p>{prompt()}</p></div>
       <pre id='completion'><code>
         <For each={partials()}>{(partial) =>

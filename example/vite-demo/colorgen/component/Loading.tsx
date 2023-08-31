@@ -76,7 +76,7 @@ export default function Loading({
         <div>Loading GPU shaders: {loadGpuShaders()}</div>
       </Show>
       <Show
-        when={ready() !== false}
+        when={ready()}
         fallback={<h2>Loading..</h2>}
       >
         <h2>Ready</h2>
