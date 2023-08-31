@@ -32,9 +32,7 @@ const view: View = {
         <h3>{color} is a shade of {primary}</h3>
         <div style={`width: ${size}; height: ${size}; background-color: #${color}`}>
         </div>
-        <Show
-          when={showAgain()}
-          >
+        <Show when={showAgain()} >
           <button style={`margin: 2rem`} onClick={() => {
             setShowAgain(false)
             update({state: 'primary'})
@@ -101,13 +99,13 @@ const App = ({model}: {model: LoadedModel}) => {
 
   const createTemplate = ad(model)
 
-  const setAppModel = (appModel: AppModel) => setAppModels([...appModels(), appModel])
+  const addAppModel = (appModel: AppModel) => setAppModels([...appModels(), appModel])
 
   return (
     <For each={appModels()}>{appModel =>
       <Dynamic
         component={view[appModel.state]}
-        update={setAppModel}
+        update={addAppModel}
         model={model}
         {...appModel}
         {...createTemplate}

@@ -4,3 +4,5 @@ Each run loops over three steps:
   1. generate a primary color
   1. generate a shade of that color
   1. present it
+
+The ShowInfer uses a Template signal + createEffect to consume it so it will re-run if the template is updated.
