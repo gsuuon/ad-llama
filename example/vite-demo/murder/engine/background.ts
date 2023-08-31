@@ -1,5 +1,5 @@
 import { sample, ad, LoadedModel } from 'ad-llama'
-import { renderTemplate } from '../renderTemplate'
+import { renderTemplate } from '../../renderTemplate'
 
 const { consistsOf } = sample
 
