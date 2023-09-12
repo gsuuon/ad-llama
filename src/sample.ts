@@ -16,7 +16,7 @@ export type CpuNDArray = {
 /**
  * Select relevant tokens -- called once for each token generation
  */
-type SamplerSelector = (cpuLogits: CpuNDArray, tokens: number[], completion: string) => number[]
+type SamplerSelector = (tokens: number[], completion: string) => number[]
   // NOTE that since we return relevant tokens as an array, duplicates will have their bias applied twice (no change with gates)
   // I'm considering this a feature for now as a way to weigh relevant tokens, but consider changing number[] to a Set.
 
@@ -74,7 +74,7 @@ export const buildBias = (model: Model): Bias => {
       return (cpuLogits, tokens, completion) => {
         const logits = cpuLogits.data
 
-        const relevantTokens = selector(cpuLogits, tokens, completion)
+        const relevantTokens = selector(tokens, completion)
 
         if (relevantTokens.length > 0) {
           console.debug('penalize', {
@@ -109,7 +109,7 @@ export const buildBias = (model: Model): Bias => {
       return (cpuLogits, tokens, completion) => {
         const logits = cpuLogits.data
 
-        const relevantTokens = selector(cpuLogits, tokens, completion)
+        const relevantTokens = selector(tokens, completion)
 
         if (relevantTokens.length > 0) {
           const modified = logits.toArray().map(adjust(relevantTokens))
@@ -195,7 +195,7 @@ export const oneOf: (items: string[]) => CreateSamplerTemplate = items => model 
     }
   )
 
-  return (_logits, tokens, _completions) => {
+  return (tokens, _completions) => {
     const filtered = encoded.filter(item => arrayStartsWith(tokens, item) && item.length > tokens.length)
     const nextRelevantTokens = filtered.map(x => x[tokens.length])
 
@@ -253,7 +253,7 @@ export const consistsOf = (chars: string[]) => (model: Model) => (priorCompletio
 
   const encoded = Array.from(new Set(encodedTokens))
 
-  return (_, tokens, completion) => {
+  return (tokens, completion) => {
     console.debug('consistsOf', {
       tokens: [...tokens],
       tokensChars: model.tokenizer.decode(new Int32Array(tokens)),
