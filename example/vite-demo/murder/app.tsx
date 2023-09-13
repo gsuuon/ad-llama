@@ -1,40 +1,25 @@
-import { render } from 'solid-js/web'
-import { LoadedModel, ad } from 'ad-llama'
-
-import ShowInfer from './component/ShowInfer'
-import Loading from './component/Loading'
-import { Show, createSignal } from 'solid-js'
+import { createSignal } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
+import { LoadedModel } from 'ad-llama'
 
 const app = document.getElementById('app')!
 
-const TestInfer = ({ model }: { model: LoadedModel }) => {
-  const { context, prompt } = ad(model)
+const App = <AppModel,>({
+  model,
+}: {
+  model: LoadedModel
+}) => {
+  const [appModel, setAppModel] = createSignal<AppModel>({state: 'primary'})
 
-  const assistant = context('You are a helpful assistant.', 'count to ten', { temperature: 0.1 })
+  const createTemplate = ad(model)
 
-  return (
-    <ShowInfer
-      template={assistant`one, two, three, ${prompt('')}, five, ${prompt('')}`}
-      onComplete={results => console.log(results)}
-    />
-  )
+  return <Dynamic
+    component={view[appModel().state]}
+    update={setAppModel}
+    model={model}
+    {...appModel()}
+    {...createTemplate}
+  />
 }
 
-const App = () => {
-  const [model, setModel] = createSignal<LoadedModel | undefined>()
-
-  return (
-    <Show
-      when={model() !== undefined}
-      fallback={
-        <Loading
-          llamaModel='Llama-2-7b-chat-hf-q4f32_1'
-          onLoad={setModel}
-        />
-      }>
-      <TestInfer model={model()!} />
-    </Show>
-  )
-}
-
-render(() => <App />, app)
+export default App
