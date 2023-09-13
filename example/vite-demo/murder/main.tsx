@@ -4,9 +4,11 @@ import { LoadedModel } from 'ad-llama'
 
 import Loading from './component/Loading'
 import App from './app'
+import { initial } from './model'
+import view from './views/index'
 
 
-const Load = () => {
+const Main = () => {
   const [model, setModel] = createSignal<LoadedModel | undefined>()
 
   return (
@@ -18,9 +20,13 @@ const Load = () => {
           onLoad={setModel}
         />
       }>{
-        model => <App model={model()} />
+        model => <App
+          model={model()}
+          view={view}
+          initialAppModel={initial}
+        />
     }</Show>
   )
 }
 
-render(() => <Load />, document.getElementById('app')!)
+render(() => <Main />, document.getElementById('app')!)
