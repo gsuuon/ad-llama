@@ -26,14 +26,4 @@ const App = <Model extends {state: string}>({
   />
 }
 
-
-import view from './views/index'
-
-const main = (model: LoadedModel) =>
-  <App
-    model={model}
-    view={view}
-    initialAppModel={ { state: 'generate background' } }
-  />
-
 export default App
