@@ -1,0 +1,25 @@
+form {
+  border: 2px solid gray;
+  border-radius: 4px;
+  background: #efefef;
+  display: flex;
+  padding: 0.5rem;
+}
+
+input {
+  border: none;
+  flex: 1 0 1px;
+  background: none;
+}
+
+button {
+  padding: 0.25rem 1rem;
+}
+
+input:focus {
+  outline: none
+}
+
+form:focus-within {
+  outline: 2px solid black; 
+}

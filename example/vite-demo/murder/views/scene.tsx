@@ -1,10 +1,12 @@
-import { createSignal } from 'solid-js'
+import { For, createSignal } from 'solid-js'
 
 import { ModelScene } from '../model'
 import ShowInfer from '../component/ShowInfer'
 import { breakParagraph } from '../llm/util'
 
 import { View } from './type'
+
+import './scene.css'
 
 
 const view: View<ModelScene> = {
@@ -52,9 +54,33 @@ const view: View<ModelScene> = {
       }
     />
   },
-  "scene player input": ({}) => {
+  "scene player input": ({model}) => {
+    const [input, setInput] = createSignal('')
+    const { background, scene } = model()
+
     return (
       <>
+        <div>{background.setting}</div>
+        <div>{scene.description}</div>
+        <ul>
+          <For each={scene.characterNames}>
+            {name => <li>{name}</li>}
+          </For>
+        </ul>
+        <div>
+          <form onSubmit={e => {e.preventDefault(); console.log({input: input()})}}>
+            <input
+              required
+              id='action'
+              placeholder='What do you do now?'
+              autocomplete='off'
+              type='text'
+              value={input()}
+              onChange={e => setInput(e.currentTarget.value)}
+            />
+            <button type='submit'>go</button>
+          </form>
+        </div>
       </>
     )
   }
