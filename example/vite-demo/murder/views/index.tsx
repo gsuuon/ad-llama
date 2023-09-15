@@ -103,19 +103,21 @@ const view: View<Model> = {
 
           console.log({next, rest, character})
 
+          const nextCharacters = [...characters, character]
+
           if (next) {
             update({
               state: 'character',
               background: background,
-              characters: [...characters, character],
+              characters: nextCharacters,
               currentCharacterName: next,
               pendingCharacterNames: rest
             })
           } else {
             update({
               state: 'scene generate',
+              characters: nextCharacters,
               background,
-              characters,
               scenes: []
             })
           }
