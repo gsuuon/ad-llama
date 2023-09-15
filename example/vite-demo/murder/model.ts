@@ -78,6 +78,8 @@ export type Model = {
   state: 'character'
   background: Background
   characters: Character[]
+  currentCharacterName: string
+  pendingCharacterNames: string[]
 } | ModelScene
   | ModelConversation
 
