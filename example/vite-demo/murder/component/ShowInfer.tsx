@@ -4,12 +4,13 @@ import { Accessor, For, Show, createEffect, createSignal } from 'solid-js'
 
 export default function ShowInfer({ template, onComplete }: {
   template: Accessor<Template>,
-  onComplete: (refs: any) => any;
+  onComplete: (result: Awaited<ReturnType<Template['collect_refs']>>) => void
 }) {
   const [canCancel, setCanCancel] = createSignal(true)
   const [prompt, setPrompt] = createSignal('')
   const [templateText, setTemplateText] = createSignal('')
   const [partials, setPartials] = createSignal<StreamPartial[]>([])
+  const [error, setError] = createSignal<any>()
 
   createEffect(() => {
     setPartials([])
@@ -32,12 +33,14 @@ export default function ShowInfer({ template, onComplete }: {
           setTemplateText(partial.content)
           break
       }
-    }).then(results => {
+    })
+      .then(results => {
         setCanCancel(false)
         onComplete(results)
       })
-
-    console.log('showinfer', template())
+      .catch(error => {
+        setError(error)
+      })
   })
 
   return (
@@ -48,13 +51,16 @@ export default function ShowInfer({ template, onComplete }: {
       <div id='prompt'><p>{prompt()}</p></div>
       <pre id='completion'><code>
         <For each={partials()}>{(partial) =>
-          <span classList={{[partial.type]: true}}>{partial.content}</span>
+          <span classList={{ [partial.type]: true }}>{partial.content}</span>
         }</For>
       </code></pre>
-      <Show when={canCancel()} >
+      <Show when={canCancel()}>
         <div id='controls'>
           <button onClick={() => template().model.cancel()}>cancel</button>
         </div>
+      </Show>
+      <Show when={error()}>
+        <div style={{color: 'red'}}>{error().toString()}</div>
       </Show>
     </div>
   )
