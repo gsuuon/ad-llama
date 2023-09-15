@@ -2,6 +2,7 @@ import { createSignal } from 'solid-js'
 import { sample } from 'ad-llama'
 
 import { Model } from '../model'
+import { breakParagraph } from '../llm/util'
 import ShowInfer from '../component/ShowInfer'
 
 import { View } from './type'
@@ -63,8 +64,6 @@ const view: View<Model> = {
   },
   character: ({update, llm, context, a, model}) => {
     const { background, characters, currentCharacterName, pendingCharacterNames } = model()
-    const { bias } = llm
-    const { consistsOf } = sample
 
     const characterGen = context(
       'You are a text RPG game runner for a murder-mystery game.',
@@ -75,24 +74,15 @@ const view: View<Model> = {
         + '\n\n'
     )
 
-    const breakParagraph = {
-      // try to get a '\n' to stop at a paragraph
-      // TODO sampler which starts preferring '\n' after a certain amount of tokens
-      // for now we just retry if we got nothing
-      sampler: bias.prefer(consistsOf(['\n']), 1.2),
-      stops: ['\n'],
-      validate: { check: (x: string) => x.length > 1, retries: 3 }
-    }
-
     const [template] = createSignal(characterGen`{
       "name": "${currentCharacterName}",
       "role": "${a('role for this non-player character - what is their place in this story?')}",
       "description": "${a('description of this non-player character', {
       maxTokens: 600,
-      ...breakParagraph
+      ...breakParagraph(llm)
       })}",
-      "secret": "${a('hidden secret about this character', breakParagraph)}",
-      "motivation": "${a('motivation of this character which may hint at their secret', breakParagraph)}",
+      "secret": "${a('hidden secret about this character', breakParagraph(llm))}",
+      "motivation": "${a('motivation of this character which may hint at their secret', breakParagraph(llm))}",
       "summary": "${a('one sentence summary of the character containing only publically known information about them', {stops:['.']})}"
     }`)
 
