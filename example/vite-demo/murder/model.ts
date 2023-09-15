@@ -31,10 +31,10 @@ type Conversation = {
 }
 
 type Scene = {
-  characters: Character[]
+  characterNames: string[]
   conversations: Conversation[]
   description: string
-  summary: string
+  summary?: string
 }
 
 export type ModelScene = {
