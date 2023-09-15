@@ -9,19 +9,19 @@ import view from './views/index'
 
 
 const Main = () => {
-  const [model, setModel] = createSignal<LoadedModel | undefined>()
+  const [llm, setLlm] = createSignal<LoadedModel | undefined>()
 
   return (
     <Show
-      when={model()}
+      when={llm()}
       fallback={
         <Loading
           llamaModel='Llama-2-7b-chat-hf-q4f32_1'
-          onLoad={setModel}
+          onLoad={setLlm}
         />
       }>{
-        model => <App
-          model={model()}
+        llm => <App
+          llm={llm()}
           view={view}
           initialAppModel={initial}
         />
