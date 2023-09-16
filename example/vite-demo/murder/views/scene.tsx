@@ -1,4 +1,5 @@
 import { For, createSignal } from 'solid-js'
+import { sample } from 'ad-llama'
 
 import { ModelScene } from '../model'
 import ShowInfer from '../component/ShowInfer'
@@ -10,7 +11,7 @@ import './scene.css'
 
 
 const view: View<ModelScene> = {
-  "scene generate": ({ update, model, llm, context, a }) => {
+  'scene generate': ({ update, model, llm, context, a }) => {
     const { background, characters } = model()
 
     const gameRunner = context(
@@ -54,21 +55,37 @@ const view: View<ModelScene> = {
       }
     />
   },
-  "scene player input": ({model}) => {
+  'scene player input': ({update, model}) => {
     const [input, setInput] = createSignal('')
-    const { background, scene } = model()
+    const { background, scene, scenes, characters } = model()
 
     return (
       <>
-        <div>{background.setting}</div>
-        <div>{scene.description}</div>
-        <ul>
-          <For each={scene.characterNames}>
-            {name => <li>{name}</li>}
-          </For>
-        </ul>
         <div>
-          <form onSubmit={e => {e.preventDefault(); console.log({input: input()})}}>
+          <h3>Setting</h3>
+          <p>{background.setting}</p>
+          <h3>Scene</h3>
+          <p>{scene.description}</p>
+          <h3>Characters present</h3>
+          <ul>
+            <For each={scene.characterNames}>
+              {name => <li>{name}</li>}
+            </For>
+          </ul>
+        </div>
+        <div>
+          <form onSubmit={e => {
+            e.preventDefault()
+
+            update({
+              state: 'scene parse input',
+              characters,
+              background,
+              scene,
+              scenes,
+              playerInput: input()
+            })
+          }}>
             <input
               required
               id='action'
@@ -83,6 +100,41 @@ const view: View<ModelScene> = {
         </div>
       </>
     )
+  },
+  'scene parse input': ({model, context, llm, the }) => {
+    const { playerInput, scene } = model()
+
+    const inputTypes = {
+      inspect: 'the player is inspecting an object in the scene',
+      interact: 'the player is interacting with an object in the scene',
+      travel: 'the player is traveling to another location besides the current scene',
+      talk: 'the player is starting or continuing a conversation with someone'
+    }
+
+    const categorizer = context(
+      'You are an input categorizer for a text rpg game.',
+      '\nThe current scene:\n'
+      + scene.description
+      + '\n\nCategorize the player input according to the following types:\n'
+      + Object.entries(inputTypes).map( ([k,v]) => `"${k}" - ${v}`).join('\n')
+      + '\n\nIf the player talks to someone then it is always a talk type.'
+      + '\n\nThe player input: ' + playerInput
+    )
+
+    const [template] = createSignal(categorizer`"${the('type of the given player input', {
+      sampler: llm.bias.accept(sample.oneOf(Object.keys(inputTypes))),
+      stops: [' ', '\n', ':'],
+      temperature: 0
+    })}"`)
+
+    return <ShowInfer
+      template={template}
+      onComplete={
+        result => {
+          console.log(result.completion)
+        }
+      }
+    />
   }
 }
 

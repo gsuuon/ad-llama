@@ -42,8 +42,16 @@ export type ModelScene = {
   background: Background
   characters: Character[]
   scenes: Scene[]
+  playerSceneInput?: string // what the player said to trigger a scene generation
 } | {
   state: 'scene player input'
+  background: Background
+  characters: Character[]
+  scenes: Scene[]
+  scene: Scene
+} | {
+  state: 'scene parse input'
+  playerInput: string
   background: Background
   characters: Character[]
   scenes: Scene[]
