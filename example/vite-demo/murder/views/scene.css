@@ -1,7 +1,8 @@
 form {
   border: 2px solid gray;
   border-radius: 4px;
-  background: #efefef;
+  background: #777;
+  color: #ccc;
   display: flex;
   padding: 0.5rem;
 }
@@ -22,4 +23,14 @@ input:focus {
 
 form:focus-within {
   outline: 2px solid black; 
+}
+
+p {
+  white-space: pre-wrap;
+}
+
+@media (prefers-color-scheme: light) {
+  form {
+    background: #efefef;
+  }
 }
