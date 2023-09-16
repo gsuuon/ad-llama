@@ -12,7 +12,7 @@ import './scene.css'
 
 const view: View<ModelScene> = {
   'scene generate': ({ update, model, llm, context, a }) => {
-    const { background, characters } = model()
+    const { background, characters, scenes, playerSceneInput } = model()
 
     const gameRunner = context(
       'You are a text RPG game runner for a murder-mystery game.',
@@ -20,7 +20,13 @@ const view: View<ModelScene> = {
       + background.setting
       + '\nNon-player characters:\n'
       + characters.map(char => char.summary).join('\n - ')
-      + '\nSet the scene for where the player currently is:')
+      + ( (scenes.length > 0) ? ('\nPrevious scene:\n' + scenes[scenes.length - 1].description) : '' )
+      + ( playerSceneInput ?
+          ( '\n\nPlayer input:\n' + playerSceneInput
+            + '\n\nDescribe the scene where the player is now, after their input happens'
+          )
+          : '\nSet the scene for where the player currently is.')
+        )
 
     const [template] = createSignal(gameRunner`{
       "description": "${a('description of the current scene', breakParagraph(llm))}",
@@ -95,7 +101,7 @@ const view: View<ModelScene> = {
               value={input()}
               onChange={e => setInput(e.currentTarget.value)}
             />
-            <button type='submit'>go</button>
+            <button type='submit'>make it so</button>
           </form>
         </div>
       </>
@@ -184,8 +190,13 @@ const view: View<ModelScene> = {
     )
 
     const [template] = createSignal(gameRunner`{
-  "description": "${a('description of the effect of the players input on the scene. If only additional details are revealed, write those additional details as if they followed organically from the original scene description.')}"
-}`)
+      "description": "${a('description of the effect of the players input on the scene. If only additional details are revealed, write those additional details as if they followed organically from the original scene description.',
+      {
+        validate: {
+          transform: x => x.replace(/\n/g, '\\n')
+        }
+      })}"
+    }`)
 
     return <ShowInfer
       template={template}
