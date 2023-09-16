@@ -13,8 +13,13 @@ input {
   background: none;
 }
 
+input::placeholder {
+  color: lightgray;
+}
+
 button {
   padding: 0.25rem 1rem;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 input:focus {
@@ -22,7 +27,7 @@ input:focus {
 }
 
 form:focus-within {
-  outline: 2px solid black; 
+  outline: 2px solid #ccc; 
 }
 
 p {
@@ -32,5 +37,13 @@ p {
 @media (prefers-color-scheme: light) {
   form {
     background: #efefef;
+  }
+
+  form:focus-within {
+    outline: 2px solid black; 
+  }
+
+  input::placeholder {
+    color: gray;
   }
 }
