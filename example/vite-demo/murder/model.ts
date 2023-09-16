@@ -56,6 +56,13 @@ export type ModelScene = {
   characters: Character[]
   scenes: Scene[]
   scene: Scene
+} | {
+  state: 'scene update'
+  background: Background
+  characters: Character[]
+  scenes: Scene[]
+  scene: Scene
+  playerSceneInput: string
 }
 
 export type ModelConversation = {

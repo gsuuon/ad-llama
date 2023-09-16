@@ -101,10 +101,11 @@ const view: View<ModelScene> = {
       </>
     )
   },
-  'scene parse input': ({model, context, llm, the }) => {
-    const { playerInput, scene } = model()
+  'scene parse input': ({update, model, context, llm, the }) => {
+    const { playerInput, scene, background, characters, scenes } = model()
 
     const inputTypes = {
+      // Not sure there's a meaningful difference between interact and inspect
       inspect: 'The player is inspecting an object in the scene. This means they are simply looking at something in the scene, expecting more details. Their character is not touching anything in the current scene.',
       interact: 'The player is interacting with an object in the scene. If they attempt to open a door, or move a table, or if they are searching something that would require their character to physically touch anything.',
       travel: 'The player is traveling to another location besides the current scene. This means they are leaving the current scene location and attempting to head somewhere else.',
@@ -122,17 +123,92 @@ const view: View<ModelScene> = {
     )
 
     const [template] = createSignal(categorizer`{
-  "inputType": "${the('type of the given player input', {
-      sampler: llm.bias.accept(sample.oneOf(Object.keys(inputTypes))),
-      temperature: 0.3
-    })}"
+  "type": "${the('type of the given player input', {
+          sampler: llm.bias.accept(sample.oneOf(Object.keys(inputTypes))),
+          temperature: 0.3
+        })}"
 }`)
 
     return <ShowInfer
       template={template}
       onComplete={
         result => {
-          console.log(result.completion)
+          const input: {
+            type: keyof typeof inputTypes
+          } = JSON.parse(result.completion)
+
+          console.log({input})
+
+          switch (input.type) {
+            case 'talk':
+              console.log('start conversation')
+              break
+            case 'travel':
+              update({
+                state: 'scene generate',
+                background,
+                scenes,
+                characters,
+                playerSceneInput: playerInput
+              })
+              break
+            case 'inspect':
+              update({
+                state: 'scene update',
+                background,
+                scene,
+                scenes,
+                characters,
+                playerSceneInput: playerInput
+              })
+              break
+            case 'interact':
+              console.log('regenerate scene with additional info, and maybe npc comments')
+              break
+          }
+        }
+      }
+    />
+  },
+  'scene update': ({update, model, context, a}) => {
+    const { scene, background, playerSceneInput, scenes, characters } = model()
+
+    const gameRunner = context(
+      'You are a text RPG game runner for a murder-mystery game.',
+      'Setting:\n'
+      + background.setting
+      + '\n\nCurrent scene:\n'
+      + scene.description
+      + '\n\nPlayer input:\n'
+      + playerSceneInput
+    )
+
+    const [template] = createSignal(gameRunner`{
+  "description": "${a('description of the effect of the players input on the scene. If only additional details are revealed, write those additional details as if they followed organically from the original scene description.')}"
+}`)
+
+    return <ShowInfer
+      template={template}
+      onComplete={
+        result => {
+          const sceneAdditional: {
+            description: string
+          } = JSON.parse(result.completion)
+
+          const updatedScene = {
+            ...scene,
+            description: scene.description + '\n\n' + sceneAdditional.description
+          }
+
+          console.log({sceneAdditional})
+
+          update({
+            state: 'scene player input',
+            scene: updatedScene,
+            scenes: [...scenes.slice(0, -1), updatedScene],
+            background,
+            characters
+          })
         }
       }
     />
