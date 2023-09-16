@@ -105,10 +105,10 @@ const view: View<ModelScene> = {
     const { playerInput, scene } = model()
 
     const inputTypes = {
-      inspect: 'the player is inspecting an object in the scene',
-      interact: 'the player is interacting with an object in the scene',
-      travel: 'the player is traveling to another location besides the current scene',
-      talk: 'the player is starting or continuing a conversation with someone'
+      inspect: 'The player is inspecting an object in the scene. This means they are simply looking at something in the scene, expecting more details. Their character is not touching anything in the current scene.',
+      interact: 'The player is interacting with an object in the scene. If they attempt to open a door, or move a table, or if they are searching something that would require their character to physically touch anything.',
+      travel: 'The player is traveling to another location besides the current scene. This means they are leaving the current scene location and attempting to head somewhere else.',
+      talk: 'The player is starting or continuing a conversation with someone. If the player talks to anyone, it is considered a "talk" input.'
     }
 
     const categorizer = context(
@@ -121,11 +121,12 @@ const view: View<ModelScene> = {
       + '\n\nThe player input: ' + playerInput
     )
 
-    const [template] = createSignal(categorizer`"${the('type of the given player input', {
+    const [template] = createSignal(categorizer`{
+  "inputType": "${the('type of the given player input', {
       sampler: llm.bias.accept(sample.oneOf(Object.keys(inputTypes))),
-      stops: [' ', '\n', ':'],
-      temperature: 0
-    })}"`)
+      temperature: 0.3
+    })}"
+}`)
 
     return <ShowInfer
       template={template}
