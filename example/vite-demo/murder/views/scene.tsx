@@ -1,7 +1,7 @@
 import { For, createSignal } from 'solid-js'
 import { sample } from 'ad-llama'
 
-import { ModelScene } from '../model'
+import { Model, ModelScene } from '../model'
 import ShowInfer from '../component/ShowInfer'
 import { breakParagraph } from '../llm/util'
 
@@ -10,7 +10,7 @@ import { View } from './type'
 import './scene.css'
 
 
-const view: View<ModelScene> = {
+const view: View<Model, ModelScene> = {
   'scene generate': ({ update, model, llm, context, a }) => {
     const { background, characters, scenes, playerSceneInput } = model()
 
@@ -147,7 +147,14 @@ const view: View<ModelScene> = {
 
           switch (input.type) {
             case 'talk':
-              console.log('start conversation')
+              update({
+                state: 'conversation start',
+                playerInput,
+                background,
+                scenes,
+                characters,
+                scene
+              })
               break
             case 'travel':
               update({
