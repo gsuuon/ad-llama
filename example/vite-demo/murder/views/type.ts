@@ -7,6 +7,6 @@ export type View<AppModel extends { state: string }> = {
       { model: Accessor<Extract<AppModel, { state: key }>> }
         & CreateTemplate
         & { llm: LoadedModel }
-        & { update: (model: AppModel) => void }
+        & { update: <M = AppModel>(model: M) => void }
   ) => JSX.Element
 }
