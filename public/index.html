@@ -6,7 +6,7 @@
     <script type="importmap">
     {
       "imports" : {
-        "ad-llama": "./index.js"
+        "ad-llama": "https://www.unpkg.com/ad-llama"
       }
     }
     </script>
@@ -14,47 +14,26 @@
   </head>
   <body>
     <h1>Hello, MLC! Open the console</h1>
-    <p><code>generator</code> is available on <code>window</code> in console.</p>
-    <pre><code>
-const { template, a } = generator(
-  '&lt&ltsys&gt&gtYou are a dungeon master. &lt&lt/sys&gt&gt\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
-)
-
-const result = template`
-{
-"description": "${a('short description')}",
-"name": "${a('character name')}",
-"weapon": "${a('weapon')}",
-"class": "${a('class')}"
-}
-`
-
-const asString = await result.collect()
-console.log(asString)
-console.dir(JSON.parse(asString))
-    </code></pre>
     <script type="module">
-    import { loadModel, ad, guessModelSpecFromPrebuiltId } from 'ad-llama'
+    import { loadModel, ad, report } from 'ad-llama'
 
-    const loadedModel = await loadModel(guessModelSpecFromPrebuiltId('Llama-2-7b-chat-hf-q4f32_1'))
+    const loadedModel = await loadModel('Llama-2-7b-chat-hf-q4f32_1', report(console.info))
 
-    const generator = ad(loadedModel)
-    window.generator = generator
+    const { context, a } = ad(loadedModel)
 
-    const { template, a } = generator(
-      '<<sys>>You are a dungeon master. <</sys>>\n\n[INST] Create a character based on the Dungeons and Dragons universe.'
+    const dm = context(
+      'You are a dungeon master.',
+      'Create a character based on the Dungeons and Dragons universe.'
     )
 
-    const result = template`
-{
-  "description": "${a('short description')}",
-  "name": "${a('character name')}",
-  "weapon": "${a('weapon')}",
-  "class": "${a('class')}"
-}
-`
+    const result = dm`{
+      "description": "${a('short description')}",
+      "name": "${a('character name')}",
+      "weapon": "${a('weapon')}",
+      "class": "${a('class')}"
+    }`
 
-    const asString = await result.collect()
+    const asString = await result.collect(console.info)
     console.log(asString)
     console.dir(JSON.parse(asString))
     </script>
