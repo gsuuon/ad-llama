@@ -12,7 +12,7 @@ import scene from './scene'
 const view: View<Model> = {
   ...conversation,
   ...scene,
-  background: ({update, llm, context, a}) => {
+  'background generate': ({update, llm, context, a}) => {
     const { bias } = llm
     const { consistsOf } = sample
 
@@ -49,7 +49,7 @@ const view: View<Model> = {
           console.log({next, rest, background})
 
           update({
-            state: 'character',
+            state: 'character generate',
             background: {
               setting: background.setting,
               characterNames: background.characters
@@ -62,7 +62,7 @@ const view: View<Model> = {
       }
     />
   },
-  character: ({update, llm, context, a, model}) => {
+  'character generate': ({update, llm, context, a, model}) => {
     const { background, characters, currentCharacterName, pendingCharacterNames } = model()
 
     const characterGen = context(
@@ -107,7 +107,7 @@ const view: View<Model> = {
 
           if (next) {
             update({
-              state: 'character',
+              state: 'character generate',
               background: background,
               characters: nextCharacters,
               currentCharacterName: next,

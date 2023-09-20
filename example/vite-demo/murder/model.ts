@@ -88,9 +88,9 @@ export type ModelConversation = {
 }
 
 export type Model = {
-  state: 'background'
+  state: 'background generate'
 } | {
-  state: 'character'
+  state: 'character generate'
   background: Background
   characters: Character[]
   currentCharacterName: string
