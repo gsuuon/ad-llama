@@ -13,15 +13,7 @@ type Character = {
 }
 
 type Message = {
-  character: string
-  content: string
-}
-
-type PlayerInput = {
-  kind: 'message'
-  content: string
-} | {
-  kind: 'action'
+  character: Character | 'player'
   content: string
 }
 
@@ -66,23 +58,25 @@ export type ModelScene = {
 }
 
 export type ModelConversation = {
-  state: 'conversation'
+  // We parse out the actual content of what the player said from something like "I walk over and say hi"
+  state: 'conversation start' 
+  playerInput: string
   scene: Scene
   background: Background
   characters: Character[]
   scenes: Scene[]
 } | {
-  state: 'conversation parse input'
-  playerInputRaw: string
-  scene: Scene
+  state: 'conversation response generate'
+  conversation: Conversation
   background: Background
+  character: Character
   characters: Character[]
   scenes: Scene[]
 } | {
-  state: 'conversation response'
-  playerInput: PlayerInput
-  scene: Scene
+  state: 'conversation player input'
+  conversation: Conversation
   background: Background
+  character: Character
   characters: Character[]
   scenes: Scene[]
 }
