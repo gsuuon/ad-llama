@@ -395,7 +395,7 @@ export default async (
       : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
 
     const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
-    console.info('generate', prompt, {...options, prefillText})
+    console.info('[generate:start]', prompt, {...options_, prefillText})
 
     if (filledKvCacheLength > 0) {
       unfill()
@@ -493,7 +493,7 @@ export default async (
 
     perf.summarize()
 
-    console.info('generate', prompt, {
+    console.info('[generate:done]', prompt, {
       acceptedCount: accepted.tokens.length,
       completion: accepted.completion
     })
@@ -520,7 +520,7 @@ export default async (
       system_ = `<<sys>>${system}<</sys>>\n\n`
       preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
 
-      console.log('Context:', system, preprompt)
+      console.log('[context]', system, preprompt)
 
       // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
       // Is that possible? can I prefill with existing kvCache?
