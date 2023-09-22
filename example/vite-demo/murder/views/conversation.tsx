@@ -1,17 +1,22 @@
 import { View } from './type'
-import { Message, ModelConversation } from '../model'
+import { Conversation, Message, Model, ModelConversation, Scene } from '../model'
 import ShowInfer from '../component/ShowInfer'
 import { sample } from 'ad-llama'
-import { For, createSignal } from 'solid-js'
+import { For, createSignal, onMount } from 'solid-js'
 
-const view: View<ModelConversation> = {
+const showConversation = (conversation: Conversation) =>
+  conversation.messages.map(message => `[${message.character.name}] ${message.content}`).join('\n\n')
+
+const view: View<Model, ModelConversation> = {
   'conversation start': ({update, context, llm, the, model}) => {
-    const { scene, background, scenes, characters } = model()
+    const { scene, background, scenes, characters, playerInput } = model()
 
     const messageExtract = context(
       'You are a conversation assistant in a text-based game.',
       'Extract what is said by the player in this input and who it is directed towards.'
       + '\nCurrent characters in the scene: ' + scene.characterNames.join(', ')
+      + '\n\nPlayer input: ' + playerInput
+      + '\n\n'
     )
 
     const [template] = createSignal(messageExtract`{
@@ -44,18 +49,21 @@ const view: View<ModelConversation> = {
 
               const message: Message = {
                 content: parsedMessage.content,
-                character: 'player'
+                character: {
+                  name: 'player',
+                  role: 'player'
+                }
               }
 
               update({
                 state: 'conversation response generate',
                 background,
                 scenes,
-                character: targetChar,
                 characters,
                 conversation: {
                   messages: [ message ],
-                  sceneSummary: scene.description // TODO actually summarize
+                  sceneDescription: scene.description, // TODO actually summarize
+                  character: targetChar,
                 }
               })
             }
@@ -65,17 +73,19 @@ const view: View<ModelConversation> = {
     )
   },
   'conversation response generate': ({update, model, context, a}) => {
-    const { character, conversation } = model()
+    const { conversation, scenes } = model()
+    const character = conversation.character
 
     const roleplay = context(
       'You are role-playing as a character in a text based game having a conversation with the player',
-      'Your character: ' + character.name + ' - ' + character.role
+      'The current scene:\n' + scenes[scenes.length - 1].description
+      + 'Your character: ' + character.name + ' - ' + character.role
       + '\n\n' + character.description
       + '\n\nTheir secret: ' + character.secret
       + '\n\nTheir motivation: ' + character.motivation
     )
 
-    const messages = conversation.messages.map(message => `[${message.character}] ${message.content}`).join('\n\n')
+    const messages = showConversation(conversation)
 
     const [template] = createSignal(roleplay`${messages}\n\n[${character.name}] ${a('response from the character', {id: 'response'})}\n`)
 
@@ -87,11 +97,11 @@ const view: View<ModelConversation> = {
             ...model(),
             state: 'conversation player input',
             conversation: {
+              ...conversation,
               messages: [...conversation.messages, {
                 character,
                 content: result.refs.response
               }],
-              sceneSummary: conversation.sceneSummary
             },
           })
         }
@@ -99,15 +109,24 @@ const view: View<ModelConversation> = {
     />
   },
   'conversation player input': ({update, model}) => {
-    const { conversation } = model()
+    const { conversation, scenes } = model()
     const [input, setInput] = createSignal('')
+
+    const scene = scenes[scenes.length - 1]
+
+    let leaveButton: HTMLButtonElement | undefined;
+    onMount(() => leaveButton?.scrollIntoView())
 
     return (
       <>
         <div>
+          <h3>Scene</h3>
+          <p>{scene.description}</p>
+        </div>
+        <div>
           <For each={conversation.messages}>{
             message => <div>
-              <h3>{typeof message.character === 'string' ? message.character : message.character.name}</h3>
+              <h3>{message.character.name}</h3>
               <p>{message.content}</p>
             </div>
           }</For>
@@ -117,14 +136,17 @@ const view: View<ModelConversation> = {
 
           update({
             ...model(),
+            state: 'conversation response generate',
             conversation: {
               ...conversation,
               messages: [...conversation.messages, {
-                character: 'player',
+                character: {
+                  role: 'player',
+                  name: 'player'
+                },
                 content: input()
               }]
             },
-            state: 'conversation response generate',
           })
         }}>
           <input
@@ -136,10 +158,66 @@ const view: View<ModelConversation> = {
             value={input()}
             onChange={e => setInput(e.currentTarget.value)}
           />
-          <button type='submit'>make it so</button>
+          <button type='submit'>say</button>
         </form>
+        <div style={`display: flex;`}>
+          <button
+            style={`margin: 1rem auto;`}
+            onClick={
+              () => update({
+                ...model(),
+                state: 'conversation summarize',
+              })
+            }
+            ref={leaveButton}
+          >leave</button>
+        </div>
       </>
     )
+  },
+  'conversation summarize': ({update, context, model, the}) => {
+    const { conversation, scenes } = model()
+
+    return <ShowInfer
+      template={
+        context(
+          'You are a conversation summarizer of a text game. You very short and to-the-point summaries.',
+          'The player had a conversation with a character:\n' + showConversation(conversation)
+        )`{
+          "summary": "${the('shortest summary of the conversation', { stops: ['\n'] })}"
+        }`
+      }
+
+      onComplete={
+        result => {
+          const res: {
+            summary: string
+          } = JSON.parse(result.completion)
+
+          // pretty dirty assumptions here but it'll work
+
+          const conversation_: Conversation = {
+            ...conversation,
+            summary: res.summary
+          }
+
+          const currentScene = scenes[scenes.length - 1]
+
+          const scene: Scene = {
+            ...currentScene,
+            description: currentScene.description.trimEnd() + `\n\nThe player spoke with ${conversation_.character.name}. ` + conversation_.summary,
+            conversations: [...currentScene.conversations.slice(0, -1), conversation_]
+          }
+
+          update({
+            ...model(),
+            state: 'scene player input',
+            scene,
+            scenes: scenes.slice(0, -1).concat([scene])
+          })
+        }
+      }
+    />
   }
 }
 
