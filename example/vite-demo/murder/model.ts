@@ -12,17 +12,22 @@ type Character = {
   summary: string
 }
 
-type Message = {
-  character: Character | 'player'
+export type Message = {
+  character: Character | {
+    name: string
+    role: 'player'
+  }
   content: string
 }
 
-type Conversation = {
-  sceneSummary: string
+export type Conversation = {
+  summary?: string
+  character: Character
+  sceneDescription: string
   messages: Message[]
 }
 
-type Scene = {
+export type Scene = {
   characterNames: string[]
   conversations: Conversation[]
   description: string
@@ -34,7 +39,7 @@ export type ModelScene = {
   background: Background
   characters: Character[]
   scenes: Scene[]
-  playerSceneInput?: string // what the player said to trigger a scene generation
+  playerSceneInput?: string // what the player did to trigger a scene generation
 } | {
   state: 'scene player input'
   background: Background
@@ -69,14 +74,18 @@ export type ModelConversation = {
   state: 'conversation response generate'
   conversation: Conversation
   background: Background
-  character: Character
   characters: Character[]
   scenes: Scene[]
 } | {
   state: 'conversation player input'
   conversation: Conversation
   background: Background
-  character: Character
+  characters: Character[]
+  scenes: Scene[]
+} | {
+  state: 'conversation summarize'
+  conversation: Conversation
+  background: Background
   characters: Character[]
   scenes: Scene[]
 }
