@@ -184,14 +184,6 @@ const expandIfRefOp = (op: Exclude<Op, string>, ref: (id: string) => string | un
   return op
 }
 
-const mergeAdModelGenConfig = (exprOpts?: TemplateExpressionOptions, genOpts?: GenerateOptions): CommonOptions => ({
-  maxTokens: exprOpts?.maxTokens ?? genOpts?.maxTokens,
-  temperature: exprOpts?.temperature ?? genOpts?.temperature,
-  top_p: exprOpts?.top_p ?? genOpts?.top_p,
-  validate: exprOpts?.validate ?? genOpts?.validate,
-  sampler: exprOpts?.sampler ?? genOpts?.sampler
-})
-
 /**
  * A defined template ready for inferencing
  */
@@ -354,7 +346,8 @@ export const ad = (model: LoadedModel): CreateTemplate => {
               [stop, ...(options?.stops ?? [])],
               {
                 stream,
-                ...mergeAdModelGenConfig(config, options)
+                ...config,
+                ...options
               }
             )
 

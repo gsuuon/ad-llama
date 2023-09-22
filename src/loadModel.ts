@@ -382,17 +382,20 @@ export default async (
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
 
-    const accepted = acceptTokenInference(tokenizer, stops, prompt, options?.stream)
+    const options_ = {
+      temperature: 1.0,
+      top_p: 0.95,
+      maxTokens: 400,
+      ...options
+    }
 
-    const temperature = options?.temperature ?? 1.0
-    const top_p = options?.top_p ?? 0.95
-    const maxTokens = options?.maxTokens ?? 400
+    const accepted = acceptTokenInference(tokenizer, stops, prompt, options_?.stream)
 
-    const buildSampler = options?.sampler
+    const buildSampler = options_?.sampler
     const sample =
       buildSampler
-      ? buildSampler(priorCompletion, stops, temperature, top_p)
-      : (logits: CpuNDArray) => sampleTokenFromLogits(logits, temperature, top_p)
+      ? buildSampler(priorCompletion, stops, options_.temperature, options_.top_p)
+      : (logits: CpuNDArray) => sampleTokenFromLogits(logits, options_.temperature, options_.top_p)
 
     const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
     console.info('[generate:start]', prompt, {...options_, prefillText})
@@ -416,7 +419,7 @@ export default async (
     const continueSampling = accepted.accept(nextToken) // will be false if our first char was a stop
 
     if (continueSampling) {
-      while (!(modelState === ModelState.Cancelling) && accepted.tokens.length < maxTokens) {
+      while (!(modelState === ModelState.Cancelling) && accepted.tokens.length < options_.maxTokens) {
         const tokens = accepted.tokens
 
         const stopDecodeTimer = perf.timer('decode')
@@ -445,10 +448,10 @@ export default async (
 
     modelState = ModelState.Waiting
 
-    if (options?.validate) {
-      if (options.validate.check && !options.validate.check(accepted.completion)) {
-        if (options.validate.retries && options.validate.retries > 0) {
-          options?.stream?.({
+    if (options_?.validate) {
+      if (options_.validate.check && !options_.validate.check(accepted.completion)) {
+        if (options_.validate.retries && options_.validate.retries > 0) {
+          options_?.stream?.({
             type: 'ungen',
             tokenCount: accepted.tokens.length,
             content: accepted.completion
@@ -457,31 +460,31 @@ export default async (
           console.log({failedValidation: accepted.completion})
 
           return await generate(prompt, priorCompletion, stops, {
-            ...options,
+            ...options_,
             validate: {
-              ...options.validate,
-              retries: options.validate.retries - 1,
+              ...options_.validate,
+              retries: options_.validate.retries - 1,
             }
           })
         } else {
           console.warn('Expression failed validation but ran out of retries', {
             completion: accepted.completion,
-            retries: options.validate.retries ?? 0
+            retries: options_.validate.retries ?? 0
           })
         }
       }
 
-      if (options.validate.transform) {
+      if (options_.validate.transform) {
         // We transform even if validation fails due to exhausting retries. Should we only transform if validate succeeds?
-        options?.stream?.({
+        options_?.stream?.({
           type: 'ungen',
           tokenCount: accepted.tokens.length,
           content: accepted.completion
         })
 
-        const transformed = options.validate.transform(accepted.completion)
+        const transformed = options_.validate.transform(accepted.completion)
 
-        options?.stream?.({
+        options_?.stream?.({
           type: 'gen',
           content: transformed,
           prompt
