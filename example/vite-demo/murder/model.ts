@@ -101,6 +101,10 @@ export type Model = {
 } | ModelScene
   | ModelConversation
 
-export const initial: Model = {
-  state: 'background'
+const generateBackground: Model = {
+  state: 'background generate'
 }
+
+import coastal from './checkpoints/coastal_2_john_quest.json'
+
+export const initial: Model[] = coastal
