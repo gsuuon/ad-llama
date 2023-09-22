@@ -3,7 +3,7 @@ import { Template, StreamPartial } from 'ad-llama'
 import { Accessor, For, Show, createEffect, createSignal } from 'solid-js'
 
 export default function ShowInfer({ template, onComplete }: {
-  template: Accessor<Template>,
+  template: Accessor<Template> | Tempalte,
   onComplete: (result: Awaited<ReturnType<Template['collect_refs']>>) => void
 }) {
   const [canCancel, setCanCancel] = createSignal(true)
@@ -15,7 +15,9 @@ export default function ShowInfer({ template, onComplete }: {
   createEffect(() => {
     setPartials([])
 
-    template().collect_refs(partial => {
+    const template_ = typeof template === 'function' ? template() : template
+
+    template_.collect_refs(partial => {
       switch (partial.type) {
         case 'ungen':
           setPartials([...partials().slice(0, -partial.tokenCount)])
