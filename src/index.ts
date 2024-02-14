@@ -1,7 +1,5 @@
 import type {
   ModelSpec,
-  GenerateOptions,
-  CommonOptions,
   LoadedModel,
   LoadReport,
   TemplateExpression,
@@ -18,8 +16,8 @@ let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
 
 // NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
 const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works for currently known prebuilts
-    modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
-    modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
+  modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
+  modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
 })
 /**
  * Load a model spec or try to guess it from a prebuilt-id.
@@ -64,7 +62,7 @@ export const loadModel = async (
   })
 
   if (cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl
-      && cachedModelAndSpec?.spec.modelWeightsConfigUrl == cachedModelAndSpec?.spec.modelWeightsConfigUrl) {
+    && cachedModelAndSpec?.spec.modelWeightsConfigUrl == cachedModelAndSpec?.spec.modelWeightsConfigUrl) {
     await cachedModelAndSpec.model.cancel()
     return cachedModelAndSpec.model
   }
@@ -148,7 +146,7 @@ const asOp = (
 
       const contextPreword = configPreword ?? (
         expr.preword === 'a' ? 'Generate' :
-          expr.preword === 'the' ? 'What is' : 
+          expr.preword === 'the' ? 'What is' :
             ''
       )
 
@@ -173,7 +171,7 @@ const expandIfRefOp = (op: Exclude<Op, string>, ref: (id: string) => string | un
         prompt: expr,
         stop: op.stop
       }
-    } 
+    }
 
     return {
       ...expr,
@@ -191,7 +189,7 @@ export type Template = {
   /** Collect the template as a string - optionally with a streaming handler */
   collect: (stream?: GenerationStreamHandler) => Promise<string>
   /** Like collect but returns the completion and refs */
-  collect_refs: (stream?: GenerationStreamHandler) => Promise<{completion: string, refs: Record<string, string>}>
+  collect_refs: (stream?: GenerationStreamHandler) => Promise<{ completion: string, refs: Record<string, string> }>
   model: LoadedModel // TODO refactor to just cancel() -- this is only used to cancel the underlying model
 }
 
@@ -211,7 +209,7 @@ export type Template = {
 type CreateTemplateContext =
   (
     literals: TemplateStringsArray,
-    ...expressions: (TemplateExpression|WithRef<TemplateExpression>)[]
+    ...expressions: (TemplateExpression | WithRef<TemplateExpression>)[]
   ) => Template
 
 /**
@@ -284,7 +282,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
       options,
       preword: null,
     }),
-    context: (system: string, preprompt?: string, config?: TemplateContextOptions): CreateTemplateContext =>(literals, ...expressions) => {
+    context: (system: string, preprompt?: string, config?: TemplateContextOptions): CreateTemplateContext => (literals, ...expressions) => {
       let refs: Record<string, string> = {}
       const ref = (id: string): string | undefined => refs[id]
 
@@ -300,17 +298,15 @@ export const ad = (model: LoadedModel): CreateTemplate => {
       }
 
       const collect = async (stream?: GenerationStreamHandler) => {
-        await model.setContext(system, preprompt)
-
         if (stream) {
           stream({
-            content: ops.reduce<string>( (completion, op) => {
-              if (typeof(op) === 'string') {
+            content: ops.reduce<string>((completion, op) => {
+              if (typeof (op) === 'string') {
                 return completion + op
               } else {
                 if ('refExpr' in op) {
                   const expr = op.refExpr(x => `(ref: ${x})`)
-                  console.log('template refExpr', {expr})
+                  console.log('template refExpr', { expr })
                   return completion + `\${'${typeof expr === 'string' ? expr : expr.prompt}'}`
                 } else {
                   return completion + `\${'${op.prompt}'}`
@@ -331,7 +327,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
         return ops.reduce<Promise<string>>(async (completion_, op) => {
           const completion = await completion_
 
-          if (typeof(op) === 'string') {
+          if (typeof (op) === 'string') {
             stream?.({
               content: op,
               type: 'lit'
@@ -340,10 +336,13 @@ export const ad = (model: LoadedModel): CreateTemplate => {
           } else {
             const { options, prompt, stop } = expandIfRefOp(op, ref)
 
-            const generated = await model.generate(
+            const generated = await model.generate({
               prompt,
-              completion,
-              [stop, ...(options?.stops ?? [])],
+              preprompt,
+              system,
+              priorCompletion: completion,
+              stops: [stop, ...(options?.stops ?? [])],
+            },
               {
                 stream,
                 ...config,
@@ -367,7 +366,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
 
           return {
             completion,
-            refs
+            refs // FIXME refs should be scoped to collect, subsequent contexts will have stale refs
           }
         },
         model

@@ -58,11 +58,11 @@ const perf = (() => {
     get entries() { return entries },
     summarize: () => {
       const sums = Object.fromEntries(Object.entries(entries).map(
-        ([label, results]) => [label, results.reduce((a,x) => a + x, 0) ]
+        ([label, results]) => [label, results.reduce((a, x) => a + x, 0)]
       ))
 
       const averages = Object.fromEntries(Object.entries(sums).map(
-        ([label, sum]) => [label, sum / entries[label].length ]
+        ([label, sum]) => [label, sum / entries[label].length]
       ))
 
       console.debug('#perf', { sums, averages, entries })
@@ -98,17 +98,17 @@ export default async (
   const device = targetDevice === TargetDevice.GPU ? tvm.webgpu() : tvm.cpu()
 
   if (targetDevice === TargetDevice.GPU) {
-    updateReport({detectGPU: 'waiting'})
+    updateReport({ detectGPU: 'waiting' })
 
     const gpu = await detectGPUDevice()
     if (gpu == undefined) {
-      updateReport({detectGPU: 'failed'})
+      updateReport({ detectGPU: 'failed' })
       throw Error('Cannot find GPU in environment')
     }
 
     updateReport({ detectGPU: gpu.adapterInfo.vendor })
 
-    tvm.initWebGPU(gpu.device) 
+    tvm.initWebGPU(gpu.device)
   }
 
   let isLoadingGpuShaders = false
@@ -146,7 +146,7 @@ export default async (
     'tokenizer.model': Tokenizer.fromSentencePiece,
     'tokenizer.json': Tokenizer.fromJSON
   }).find(([file, _create]) => config.tokenizer_files.includes(file))
-    // preference comes from the order of tokenizer_files -- seems like .json is preferred over .model
+  // preference comes from the order of tokenizer_files -- seems like .json is preferred over .model
 
   if (configTokenizerFiles == undefined) {
     const err = `Cant handle tokenizer files ${config.tokenizer_files}`;
@@ -158,7 +158,7 @@ export default async (
 
   const tokenizerResult =
     await cacheScope('model')
-    .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
+      .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
   const w = window as any
@@ -192,7 +192,6 @@ export default async (
   const getMetadata = vm.getFunction('get_metadata')
   const metadata = JSON.parse(tvm.detachFromCurrentScope(getMetadata()).toString())
 
-  console.info({metadata})
   const stopTokens: number[] = metadata.stop_tokens
 
   const createKvCache = vm.getFunction('create_kv_cache')
@@ -308,8 +307,6 @@ export default async (
   }
 
   let modelState: ModelState = ModelState.Waiting
-  let system_ = '<<sys>>You are a helpful assistant<</sys>>\n\n'
-  let preprompt_ = '[INST]'
 
   let totalTokenCount = 0
 
@@ -333,10 +330,6 @@ export default async (
         totalTokenCount += 1
 
         if (stopTokens.includes(token)) {
-          console.info('stop token', token, {
-            tokens,
-            completion
-          })
           return false
         }
 
@@ -374,10 +367,13 @@ export default async (
   }
 
 
-  const generate = async (
-    prompt: string,
-    priorCompletion: string,
-    stops: string[],
+  const generate: LoadedModel['generate'] = async ({
+    prompt,
+    priorCompletion,
+    stops,
+    system,
+    preprompt
+  },
     options?: GenerateOptions
   ): Promise<string> => {
     modelState = ModelState.Running as ModelState
@@ -394,11 +390,11 @@ export default async (
     const buildSampler = options_?.sampler
     const sample =
       buildSampler
-      ? buildSampler(priorCompletion, stops, options_.temperature, options_.top_p)
-      : (logits: CpuNDArray) => sampleTokenFromLogits(logits, options_.temperature, options_.top_p)
+        ? buildSampler(priorCompletion, stops, options_.temperature, options_.top_p)
+        : (logits: CpuNDArray) => sampleTokenFromLogits(logits, options_.temperature, options_.top_p)
 
-    const prefillText = `${system_}${preprompt_} ${prompt} [/INST] ${priorCompletion}`
-    console.info('[generate:start]', prompt, {...options_, prefillText})
+    const prefillText = `<<sys>>${system ?? 'You are a helpful assistant'}<</sys>>\n\n[INST]${preprompt ? ` ${preprompt}` : ''} ${prompt} [/INST] ${priorCompletion}`
+    console.info('[generate:start]', prompt, { ...options_, prefillText })
 
     if (filledKvCacheLength > 0) {
       unfill()
@@ -457,9 +453,9 @@ export default async (
             content: accepted.completion
           })
 
-          console.log({failedValidation: accepted.completion})
+          console.info('[validation-failed]', accepted.completion)
 
-          return await generate(prompt, priorCompletion, stops, {
+          return await generate({ prompt, priorCompletion, stops }, {
             ...options_,
             validate: {
               ...options_.validate,
@@ -509,9 +505,9 @@ export default async (
   updateReport({ ready: true })
 
   return {
-    generate: async (prompt, priorCompletion, stops, options?) => {
+    generate: async (params, options?) => {
       try {
-        return await generate(prompt, priorCompletion, stops, options)
+        return await generate(params, options)
       } catch (e) {
         unfill()
         modelState = ModelState.Waiting
@@ -519,17 +515,6 @@ export default async (
       }
     },
     bias,
-    setContext: async (system: string, preprompt?: string) => {
-      system_ = `<<sys>>${system}<</sys>>\n\n`
-      preprompt_ = preprompt ? `[INST] ${preprompt}` : preprompt_
-
-      console.log('[context]', system, preprompt)
-
-      // TODO prefill here, save kvCache, reset kvCache on each generate as necessary
-      // Is that possible? can I prefill with existing kvCache?
-      // This only saves prefilling the system + preprompt anyway - it won't do anything for generates since the generate prompt
-      // goes before the completion body
-    },
     cancel: async () => {
       if (modelState === ModelState.Running) {
         modelState = ModelState.Cancelling

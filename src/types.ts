@@ -62,8 +62,8 @@ export type TemplateExpressionOptions = {
 
 export type TemplateContextOptions =
   Omit<TemplateExpressionOptions, 'id'> & {
-  preword?: string
-}
+    preword?: string
+  }
 
 export type TemplateExpression = {
   prompt: string
@@ -80,17 +80,17 @@ export type TemplateExpression = {
  * ```
  */
 export type LoadedModel = {
-  setContext: (system: string, preprompt?: string) => Promise<void>
-  generate: (
+  generate: (params: {
     prompt: string,
-    completion: string,
+    priorCompletion: string,
     stops: string[],
-    config?: GenerateOptions
-  ) => Promise<string>
+    system?: string,
+    preprompt?: string
+  }, config?: GenerateOptions) => Promise<string>
   cancel: () => Promise<void>
   bias: Bias
   totalTokenCount: number
-} 
+}
 
 /**
  * Specifies where to retrieve model weights and configuration
