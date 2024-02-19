@@ -1,7 +1,7 @@
 {
   "name": "ad-llama",
   "type": "module",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Structured inference with LLaMa 2 in your browser",
   "main": "lib/index.js",
   "files": [
