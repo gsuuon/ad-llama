@@ -1,11 +1,8 @@
-import type { NDArray } from 'tvmjs'
-import { ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI } from 'tvmjs'
+import { NDArray, ArtifactCache, detectGPUDevice, instantiate, createPolyfillWASI, Scalar } from 'tvmjs'
 import { Tokenizer } from '@mlc-ai/web-tokenizers'
 
-import type { DeviceNDArray, CpuNDArray } from './sample.js'
-
+import { DeviceNDArray, CpuNDArray, buildBias } from './sample.js'
 import { TargetDevice } from './types.js'
-import { buildBias } from './sample.js'
 
 import type {
   ModelSpec,
@@ -185,23 +182,75 @@ export default async (
     vm.getFunction('decode')
   )
 
+  const getMetadata = vm.getFunction('_metadata') // SLIM
+  const metadata = JSON.parse(tvm.detachFromCurrentScope(getMetadata()).toString())
+  console.info({ metadata })
+
+  const stopTokens: number[] = metadata.stop_tokens ?? [2]
+
+  const paramNames = (metadata.params as { name: string }[]).map(param => param.name)
+
   const params = tvm.detachFromCurrentScope(
-    tvm.getParamsFromCache('param', -1)
+    tvm.getParamsFromCacheByName(paramNames)
   )
 
-  const getMetadata = vm.getFunction('get_metadata')
-  const metadata = JSON.parse(tvm.detachFromCurrentScope(getMetadata()).toString())
+  const embed = tvm.detachFromCurrentScope(
+    vm.getFunction('embed')
+  )
 
-  const stopTokens: number[] = metadata.stop_tokens
-
-  const createKvCache = vm.getFunction('create_kv_cache')
+  const createKvCache = vm.getFunction('create_tir_paged_kv_cache')
 
   const clearKvCaches = tvm.detachFromCurrentScope(
-    tvm.getGlobalFunc('vm.builtin.attention_kv_cache_array_clear')
+    tvm.getGlobalFunc('vm.builtin.paged_attention_kv_cache_clear')
   )
 
-  let kvCache = tvm.detachFromCurrentScope(createKvCache())
+  const KVCacheAddSequence = tvm.detachFromCurrentScope(
+    tvm.getGlobalFunc('vm.builtin.paged_attention_kv_cache_add_sequence')
+  )
+
+  // const KVCacheRemoveSequence = tvm.detachFromCurrentScope(
+  //   tvm.getGlobalFunc('vm.builtin.paged_attention_kv_cache_remove_sequence')
+  // )
+
+  const KVCacheBeginForward = tvm.detachFromCurrentScope(
+    tvm.getGlobalFunc('vm.builtin.paged_attention_kv_cache_begin_forward')
+  )
+
+  const KVCacheEndForward = tvm.detachFromCurrentScope(
+    tvm.getGlobalFunc('vm.builtin.paged_attention_kv_cache_end_forward')
+  )
+
+  const defaultPageSize = 16;
+  const defaultMaxNumSequence = 1;
+
+  let maxWindowLength; {
+    if ('contextWindowSize' in spec) {
+      maxWindowLength = spec.contextWindowSize
+    } else if ('context_window_size' in metadata && metadata.context_window_size != -1) {
+      maxWindowLength = metadata.context_window_size
+    } else if ('max_window_size' in metadata && metadata.max_window_size != -1) {
+      maxWindowLength = metadata.max_window_size
+    } else {
+      throw new Error('Missing max window length, need either max_window_size or context_window_size')
+    }
+  }
+
+  let prefillChunkSize = -1; {
+    if ('prefill_chunk_size' in metadata && metadata.prefill_chunk_size > 0) {
+      prefillChunkSize = metadata.prefill_chunk_size
+    }
+  }
+
+  const kvCache = tvm.detachFromCurrentScope(createKvCache(
+    tvm.makeShapeTuple([defaultMaxNumSequence]),  // max_num_sequence
+    tvm.makeShapeTuple([maxWindowLength]),  // max_total_sequence_length
+    tvm.makeShapeTuple([prefillChunkSize]),  // prefill_chunk_size
+    tvm.makeShapeTuple([defaultPageSize]),  // page_size, hard coded for now
+  ));
+
   let filledKvCacheLength = 0
+
+  KVCacheAddSequence(kvCache, new Scalar(0, 'int64'))
 
   tvm.endScope()
 
@@ -209,7 +258,7 @@ export default async (
     updateReport({ loadGPUShaders: 'waiting' })
     isLoadingGpuShaders = true
 
-    await tvm.asyncLoadWebGPUPiplines(vm.getInternalModule())
+    await tvm.asyncLoadWebGPUPipelines(vm.getInternalModule())
     updateReport({ loadGPUShaders: 'done' })
   }
 
@@ -263,12 +312,19 @@ export default async (
     const inputNdArray = tvm.empty([1, tokens.length], 'int32', device)
     inputNdArray.copyFrom(tokens)
 
+    const seqLen = inputNdArray.shape[1]
+
+    const seqIdsTuple = tvm.makeShapeTuple([0])
+    const inputLenShape = tvm.makeShapeTuple([seqLen])
+
+    KVCacheBeginForward(kvCache, seqIdsTuple, inputLenShape)
+    const embed_ = embed(inputNdArray, params)
     const retValue = prefill(
-      inputNdArray,
-      tvm.makeShapeTuple([tokens.length]),
+      embed_,
       kvCache,
       params
     )
+    KVCacheEndForward(kvCache)
 
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
     tvm.endScope()
@@ -287,12 +343,17 @@ export default async (
     const inputNdArray = tvm.empty([1, 1], 'int32', device)
     inputNdArray.copyFrom([lastToken])
 
+    const seqIdsTuple = tvm.makeShapeTuple([0])
+    const appendLength = tvm.makeShapeTuple([1])
+
+    KVCacheBeginForward(kvCache, seqIdsTuple, appendLength)
+    const embed_ = embed(inputNdArray, params)
     const retValue = decode(
-      inputNdArray,
-      tvm.makeShapeTuple([filledKvCacheLength + 1]),
+      embed_,
       kvCache,
       params
     )
+    KVCacheEndForward(kvCache)
 
     const logits = tvm.detachFromCurrentScope(retValue.get(0))
 
@@ -313,6 +374,7 @@ export default async (
   const unfill = () => {
     clearKvCaches(kvCache)
     filledKvCacheLength = 0
+    KVCacheAddSequence(kvCache, new Scalar(0, 'int64'))
   }
 
   const acceptTokenInference = (

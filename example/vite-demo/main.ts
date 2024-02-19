@@ -11,11 +11,11 @@ const alsoToLowerCase = (x: string) => [x.toLowerCase(), x]
 renderTemplate(app, async () => {
   const model =
     await loadModel(
-      'Llama-2-7b-chat-hf-q4f32_1',
+      'Llama-2-7b-chat-hf-q4f16_1',
       report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
       new URLSearchParams(window.location.search).get('cpu') === null
         ? TargetDevice.GPU // TODO TargetDevice.CPU wont work until we have tvmjs wasm64 -- try to rebuild with emcc -sMEMORY64
-        : TargetDevice.CPU 
+        : TargetDevice.CPU
     )
 
   const { context, a } = ad(model)

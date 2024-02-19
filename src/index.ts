@@ -15,10 +15,21 @@ import doLoadModel from './loadModel.js'
 let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
 
 // NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
-const guessModelSpecFromPrebuiltId = (id: string) => ({ // TODO generally works for currently known prebuilts
-  modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/mlc-chat-${id}/resolve/main/`,
-  modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${id}-webgpu.wasm`
-})
+export const guessModelSpecFromPrebuiltId = (id: string) => {
+  const match = id.match(/^(.*?)-q(\d{1,2})f(\d{1,2})_\d$/)
+
+  if (match) {
+    const model_family = match[1]
+
+    return {
+      // TODO generally works for currently known prebuilts
+      modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/${id}-MLC/resolve/main/`,
+      modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${model_family}/${id}-ctx4k_cs1k-webgpu.wasm`
+    }
+  } else {
+    throw new Error('Unexpected model id, missing the quant part (e.g. -q4f32)')
+  }
+}
 /**
  * Load a model spec or try to guess it from a prebuilt-id.
  *

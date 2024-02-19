@@ -112,6 +112,10 @@ export type ModelSpec = {
    * https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/Llama-2-7b-chat-hf-q4f32_1-webgpu.wasm
    */
   modelLibWasmUrl: string
+  /**
+   * Size of the context window, overrides the number given in config metadata
+   */
+  contextWindowSize?: number
 }
 
 
