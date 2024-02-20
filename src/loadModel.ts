@@ -158,9 +158,6 @@ export default async (
       .fetchWithCache(new URL(path, spec.modelWeightsConfigUrl).href)
 
   const tokenizer = await create(await tokenizerResult.arrayBuffer())
-  const w = window as any
-  w.encode = (x: string) => Array.from(tokenizer.encode(x))
-  w.decode = (xs: number[]) => tokenizer.decode(new Int32Array(xs))
 
   updateReport({ loadTokenizer: 'done' })
 
@@ -588,8 +585,8 @@ export default async (
         }
       }, 16))
     },
-    get totalTokenCount() { return totalTokenCount }
+    get totalTokenCount() { return totalTokenCount },
+    encode: (x: string) => Array.from(tokenizer.encode(x)),
+    decode: (xs: number[]) => tokenizer.decode(new Int32Array(xs))
   }
 }
-
-

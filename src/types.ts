@@ -89,6 +89,8 @@ export type LoadedModel = {
   }, config?: GenerateOptions) => Promise<string>
   cancel: () => Promise<void>
   bias: Bias
+  encode: (text: string) => number[]
+  decode: (tokens: number[]) => string
   totalTokenCount: number
 }
 
