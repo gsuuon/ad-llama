@@ -1,3 +1,6 @@
 [submodule "3rdparty/relax"] 
   path = 3rdparty/relax 
-	url = https://github.com/mlc-ai/relax.git
+	url = git@github.com:gsuuon/relax.git
+[submodule "3rdparty/tokenizers-cpp"]
+	path = 3rdparty/tokenizers-cpp
+	url = git@github.com:gsuuon/tokenizers-cpp.git

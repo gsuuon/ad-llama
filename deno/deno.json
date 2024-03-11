@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "tvmjs": "../3rdparty/relax/web/src/index.ts",
+    "@mlc-ai/web-tokenizers": "../3rdparty/tokenizers-cpp/web/lib/index.js",
+  },
+  "unstable": ["sloppy-imports", "webgpu"],
+  "tasks": {
+    "generate": "deno run --allow-net generate.ts",
+    "generate:debug": "deno run --allow-net --inspect-brk generate.ts"
+  }
+}

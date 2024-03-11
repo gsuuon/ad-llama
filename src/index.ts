@@ -6,30 +6,31 @@ import type {
   GenerationStreamHandler,
   TemplateExpressionOptions,
   TemplateContextOptions,
-} from './types.js'
+} from "./types.js";
 
-import { TargetDevice } from './types.js'
-import doLoadModel from './loadModel.js'
+import { TargetDevice } from "./types.js";
+import doLoadModel from "./loadModel.js";
 
-
-let cachedModelAndSpec: { spec: ModelSpec, model: LoadedModel } | undefined;
+let cachedModelAndSpec: { spec: ModelSpec; model: LoadedModel } | undefined;
 
 // NOTE this currently only works for Llama 2 variations due to different wasm naming conventions
 export const guessModelSpecFromPrebuiltId = (id: string) => {
-  const match = id.match(/^(.*?)-q(\d{1,2})f(\d{1,2})_\d$/)
+  const match = id.match(/^(.*?)-q(\d{1,2})f(\d{1,2})_\d$/);
 
   if (match) {
-    const model_family = match[1]
+    const model_family = match[1];
 
     return {
       // TODO generally works for currently known prebuilts
       modelWeightsConfigUrl: `https://huggingface.co/mlc-ai/${id}-MLC/resolve/main/`,
-      modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${model_family}/${id}-ctx4k_cs1k-webgpu.wasm`
-    }
+      modelLibWasmUrl: `https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/${model_family}/${id}-ctx4k_cs1k-webgpu.wasm`,
+    };
   } else {
-    throw new Error('Unexpected model id, missing the quant part (e.g. -q4f32)')
+    throw new Error(
+      "Unexpected model id, missing the quant part (e.g. -q4f32)",
+    );
   }
-}
+};
 /**
  * Load a model spec or try to guess it from a prebuilt-id.
  *
@@ -48,161 +49,182 @@ export const loadModel = async (
   report?: (loadReport: LoadReport) => void,
   targetDevice: TargetDevice = TargetDevice.GPU,
 ): Promise<LoadedModel> => {
-  const spec = typeof specOrId === 'string' ? guessModelSpecFromPrebuiltId(specOrId) : specOrId
+  const spec =
+    typeof specOrId === "string"
+      ? guessModelSpecFromPrebuiltId(specOrId)
+      : specOrId;
 
   let loadReport: LoadReport = {
     modelSpec: spec,
-    targetDevice
-  }
+    targetDevice,
+  };
 
   const updateReport = (update: LoadReport) => {
     loadReport = {
       ...loadReport,
-      ...update
-    }
-    report?.(loadReport)
-  }
+      ...update,
+    };
+    report?.(loadReport);
+  };
 
-  window.addEventListener('unhandledrejection', ev => {
+  window.addEventListener("unhandledrejection", (ev) => {
     if (ev.reason instanceof Error) {
-      if (ev.reason instanceof SyntaxError) { return } // bad JSON parse
-      if (ev.reason.message.includes('Model cancelled')) { return }
+      if (ev.reason instanceof SyntaxError) {
+        return;
+      } // bad JSON parse
+      if (ev.reason.message.includes("Model cancelled")) {
+        return;
+      }
     }
 
-    updateReport({ error: ev.reason?.message ?? ev.reason })
-  })
+    updateReport({ error: ev.reason?.message ?? ev.reason });
+  });
 
-  if (cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl
-    && cachedModelAndSpec?.spec.modelWeightsConfigUrl == cachedModelAndSpec?.spec.modelWeightsConfigUrl) {
-    await cachedModelAndSpec.model.cancel()
-    return cachedModelAndSpec.model
+  if (
+    cachedModelAndSpec?.spec.modelLibWasmUrl == spec.modelLibWasmUrl &&
+    cachedModelAndSpec?.spec.modelWeightsConfigUrl ==
+      cachedModelAndSpec?.spec.modelWeightsConfigUrl
+  ) {
+    await cachedModelAndSpec.model.cancel();
+    return cachedModelAndSpec.model;
   }
 
   try {
-    const model = await doLoadModel(spec, updateReport, targetDevice)
+    const model = await doLoadModel(spec, updateReport, targetDevice);
 
-    cachedModelAndSpec = { model, spec }
+    cachedModelAndSpec = { model, spec };
 
-    return model
+    return model;
   } catch (error) {
     if (error instanceof Error) {
-      updateReport({ error: error.message })
+      updateReport({ error: error.message });
     }
 
-    throw error
+    throw error;
   }
-}
+};
 
-const keys = <T extends Object>(o: T) => Object.keys(o) as (keyof T)[]
+const keys = <T extends Object>(o: T) => Object.keys(o) as (keyof T)[];
 
 export const report = (log: (text: string) => void) => {
   let lastReport: LoadReport | undefined;
 
   const _log = (label: string, value: any) => {
-    const valueStr = value instanceof Object ? '\n' + JSON.stringify(value, null, 2) : value
+    const valueStr =
+      value instanceof Object ? "\n" + JSON.stringify(value, null, 2) : value;
 
-    log(`${label}: ${valueStr}`)
-  }
+    log(`${label}: ${valueStr}`);
+  };
 
   return (report: LoadReport) => {
     if (lastReport !== undefined) {
       for (const label of keys(lastReport)) {
         if (lastReport[label] !== report[label]) {
-          _log(label, report[label])
+          _log(label, report[label]);
         }
       }
     } else {
       for (const label of keys(report)) {
-        _log(label, report[label])
+        _log(label, report[label]);
       }
     }
 
-    lastReport = report
-  }
-}
+    lastReport = report;
+  };
+};
 
 /// <reference types="vite/client" />
 if (import.meta.hot) {
-  import.meta.hot.accept()
+  import.meta.hot.accept();
 }
 
-type Op = string | {
-  prompt: string
-  stop: string
-  options?: TemplateExpressionOptions
-} | {
-  refExpr: WithRef<TemplateExpression>
-  stop: string
-}
+type Op =
+  | string
+  | {
+      prompt: string;
+      stop: string;
+      options?: TemplateExpressionOptions;
+    }
+  | {
+      refExpr: WithRef<TemplateExpression>;
+      stop: string;
+    };
 
 const asOp = (
   expr: TemplateExpression | WithRef<TemplateExpression>,
   nextLiteral: string,
-  configPreword?: string
+  configPreword?: string,
 ): Op | string => {
-  const stop = nextLiteral.slice(0, 1)
+  const stop = nextLiteral.slice(0, 1);
 
   switch (typeof expr) {
-    case 'function':
+    case "function":
       return {
         refExpr: expr,
-        stop
-      }
-    case 'string':
-      return expr
+        stop,
+      };
+    case "string":
+      return expr;
     default:
       if (expr.preword === null) {
-        return { ...expr, stop }
+        return { ...expr, stop };
       }
 
-      const contextPreword = configPreword ?? (
-        expr.preword === 'a' ? 'Generate' :
-          expr.preword === 'the' ? 'What is' :
-            ''
-      )
+      const contextPreword =
+        configPreword ??
+        (expr.preword === "a"
+          ? "Generate"
+          : expr.preword === "the"
+            ? "What is"
+            : "");
 
       return {
         ...expr,
-        prompt: contextPreword + ' ' + expr.preword + ' ' + expr.prompt,
-        stop
-      }
+        prompt: contextPreword + " " + expr.preword + " " + expr.prompt,
+        stop,
+      };
   }
-}
+};
 
-const expandIfRefOp = (op: Exclude<Op, string>, ref: (id: string) => string | undefined): {
-  prompt: string,
-  options?: TemplateExpressionOptions,
-  stop: string
+const expandIfRefOp = (
+  op: Exclude<Op, string>,
+  ref: (id: string) => string | undefined,
+): {
+  prompt: string;
+  options?: TemplateExpressionOptions;
+  stop: string;
 } => {
-  if ('refExpr' in op) {
-    const expr = op.refExpr(ref)
+  if ("refExpr" in op) {
+    const expr = op.refExpr(ref);
 
-    if (typeof expr === 'string') {
+    if (typeof expr === "string") {
       return {
         prompt: expr,
-        stop: op.stop
-      }
+        stop: op.stop,
+      };
     }
 
     return {
       ...expr,
-      stop: op.stop
-    }
+      stop: op.stop,
+    };
   }
 
-  return op
-}
+  return op;
+};
 
 /**
  * A defined template ready for inferencing
  */
 export type Template = {
   /** Collect the template as a string - optionally with a streaming handler */
-  collect: (stream?: GenerationStreamHandler) => Promise<string>
+  collect: (stream?: GenerationStreamHandler) => Promise<string>;
   /** Like collect but returns the completion and refs */
-  collect_refs: (stream?: GenerationStreamHandler) => Promise<{ completion: string, refs: Record<string, string> }>
-  model: LoadedModel // TODO refactor to just cancel() -- this is only used to cancel the underlying model
-}
+  collect_refs: (
+    stream?: GenerationStreamHandler,
+  ) => Promise<{ completion: string; refs: Record<string, string> }>;
+  model: LoadedModel; // TODO refactor to just cancel() -- this is only used to cancel the underlying model
+};
 
 /**
  * Template creator with context established
@@ -217,11 +239,10 @@ export type Template = {
  * }`
  * ```
  */
-type CreateTemplateContext =
-  (
-    literals: TemplateStringsArray,
-    ...expressions: (TemplateExpression | WithRef<TemplateExpression>)[]
-  ) => Template
+type CreateTemplateContext = (
+  literals: TemplateStringsArray,
+  ...expressions: (TemplateExpression | WithRef<TemplateExpression>)[]
+) => Template;
 
 /**
  * Template context creator and template creation helpers
@@ -238,7 +259,11 @@ type CreateTemplateContext =
  */
 export type CreateTemplate = {
   /** Set a common system prompt and preprompt, as well as common configuration ({@link TemplateExpressionOptions}) for child templates. */
-  context: (system: string, preprompt?: string, config?: TemplateContextOptions) => CreateTemplateContext
+  context: (
+    system: string,
+    preprompt?: string,
+    config?: TemplateContextOptions,
+  ) => CreateTemplateContext;
   /**
    * A template expression with 'a' prefixed to the prompt along with the context preword (which defaults to  'Generate')
    *
@@ -253,16 +278,25 @@ export type CreateTemplate = {
    * ```
    * The prompt in the expression will be "Generate a good name for a cat"
    */
-  a: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  a: (
+    prompt: string,
+    options?: TemplateExpressionOptions,
+  ) => TemplateExpression;
   /**
    * Like {@link a} but with 'the' prefixed and defaults to 'What is' for the context preword
    */
-  the: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
+  the: (
+    prompt: string,
+    options?: TemplateExpressionOptions,
+  ) => TemplateExpression;
   /** A template expression with an unaltered prompt - the context preword is ignored */
-  prompt: (prompt: string, options?: TemplateExpressionOptions) => TemplateExpression
-}
+  prompt: (
+    prompt: string,
+    options?: TemplateExpressionOptions,
+  ) => TemplateExpression;
+};
 
-type WithRef<T> = (ref: (id: string) => string | undefined) => T
+type WithRef<T> = (ref: (id: string) => string | undefined) => T;
 
 /**
  * Create an ad-llama instance
@@ -278,122 +312,142 @@ export const ad = (model: LoadedModel): CreateTemplate => {
   // TODO additional model configuration and context-local state goes here
 
   return {
-    a: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+    a: (
+      prompt: string,
+      options?: TemplateExpressionOptions,
+    ): TemplateExpression => ({
       prompt,
       options,
-      preword: 'a'
+      preword: "a",
     }),
-    the: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+    the: (
+      prompt: string,
+      options?: TemplateExpressionOptions,
+    ): TemplateExpression => ({
       prompt,
       options,
-      preword: 'the'
+      preword: "the",
     }),
-    prompt: (prompt: string, options?: TemplateExpressionOptions): TemplateExpression => ({
+    prompt: (
+      prompt: string,
+      options?: TemplateExpressionOptions,
+    ): TemplateExpression => ({
       prompt,
       options,
       preword: null,
     }),
-    context: (system: string, preprompt?: string, config?: TemplateContextOptions): CreateTemplateContext => (literals, ...expressions) => {
-      let refs: Record<string, string> = {}
-      const ref = (id: string): string | undefined => refs[id]
+    context:
+      (
+        system: string,
+        preprompt?: string,
+        config?: TemplateContextOptions,
+      ): CreateTemplateContext =>
+      (literals, ...expressions) => {
+        let refs: Record<string, string> = {};
+        const ref = (id: string): string | undefined => refs[id];
 
-      const [head, tail] = [literals[0], literals.slice(1)]
+        const [head, tail] = [literals[0], literals.slice(1)];
 
-      let ops: Op[] = []
+        let ops: Op[] = [];
 
-      // We make an assumption here that there is always one more literal than expression
-      // Chrome seems to uphold this (template literal with only expression gets 2 empty strings)
-      for (let i = 0; i < tail.length; i++) {
-        ops.push(asOp(expressions[i], tail[i], config?.preword))
-        ops.push(tail[i])
-      }
-
-      const collect = async (stream?: GenerationStreamHandler) => {
-        if (stream) {
-          stream({
-            content: ops.reduce<string>((completion, op) => {
-              if (typeof (op) === 'string') {
-                return completion + op
-              } else {
-                if ('refExpr' in op) {
-                  const expr = op.refExpr(x => `(ref: ${x})`)
-                  console.log('template refExpr', { expr })
-                  return completion + `\${'${typeof expr === 'string' ? expr : expr.prompt}'}`
-                } else {
-                  return completion + `\${'${op.prompt}'}`
-                }
-              }
-            }, head),
-            type: 'template',
-            system,
-            preprompt
-          })
-
-          stream({
-            content: head,
-            type: 'lit'
-          })
+        // We make an assumption here that there is always one more literal than expression
+        // Chrome seems to uphold this (template literal with only expression gets 2 empty strings)
+        for (let i = 0; i < tail.length; i++) {
+          ops.push(asOp(expressions[i], tail[i], config?.preword));
+          ops.push(tail[i]);
         }
 
-        return ops.reduce<Promise<string>>(async (completion_, op) => {
-          const completion = await completion_
-
-          if (typeof (op) === 'string') {
-            stream?.({
-              content: op,
-              type: 'lit'
-            })
-            return completion + op
-          } else {
-            const { options, prompt, stop } = expandIfRefOp(op, ref)
-
-            const generated = await model.generate({
-              prompt,
-              preprompt,
+        const collect = async (stream?: GenerationStreamHandler) => {
+          if (stream) {
+            stream({
+              content: ops.reduce<string>((completion, op) => {
+                if (typeof op === "string") {
+                  return completion + op;
+                } else {
+                  if ("refExpr" in op) {
+                    const expr = op.refExpr((x) => `(ref: ${x})`);
+                    console.log("template refExpr", { expr });
+                    return (
+                      completion +
+                      `\${'${typeof expr === "string" ? expr : expr.prompt}'}`
+                    );
+                  } else {
+                    return completion + `\${'${op.prompt}'}`;
+                  }
+                }
+              }, head),
+              type: "template",
               system,
-              priorCompletion: completion,
-              stops: [stop, ...(options?.stops ?? [])],
-            },
-              {
-                stream,
-                ...config,
-                ...options
+              preprompt,
+            });
+
+            stream({
+              content: head,
+              type: "lit",
+            });
+          }
+
+          return ops.reduce<Promise<string>>(async (completion_, op) => {
+            const completion = await completion_;
+
+            if (typeof op === "string") {
+              stream?.({
+                content: op,
+                type: "lit",
+              });
+              return completion + op;
+            } else {
+              const { options, prompt, stop } = expandIfRefOp(op, ref);
+
+              const generated = await model.generate(
+                {
+                  prompt,
+                  preprompt,
+                  system,
+                  priorCompletion: completion,
+                  stops: [stop, ...(options?.stops ?? [])],
+                },
+                {
+                  stream,
+                  ...config,
+                  ...options,
+                },
+              );
+
+              if (options?.id !== undefined) {
+                refs[options.id] = generated;
               }
-            )
 
-            if (options?.id !== undefined) {
-              refs[options.id] = generated
+              return completion + generated;
             }
+          }, Promise.resolve(head));
+        };
 
-            return completion + generated
-          }
-        }, Promise.resolve(head))
-      }
+        return {
+          collect,
+          collect_refs: async (stream?: GenerationStreamHandler) => {
+            const completion = await collect(stream);
 
-      return {
-        collect,
-        collect_refs: async (stream?: GenerationStreamHandler) => {
-          const completion = await collect(stream)
+            return {
+              completion,
+              refs, // FIXME refs should be scoped to collect, subsequent contexts will have stale refs
+            };
+          },
+          model,
+        };
+      },
+  };
+};
 
-          return {
-            completion,
-            refs // FIXME refs should be scoped to collect, subsequent contexts will have stale refs
-          }
-        },
-        model
-      }
-    },
-  }
-}
-
-export {
-  TargetDevice,
+export type {
   StreamPartial,
   LoadedModel,
   GenerationStreamHandler,
   TemplateExpressionOptions,
-  LoadReport
-} from './types.js'
+  LoadReport,
+} from "./types.js";
 
-export * as validate from './validate.js'
-export * as sample from './sample.js'
+export { TargetDevice } from "./types.js";
+
+export * as validate from "./validate.js";
+export * as sample from "./sample.js";

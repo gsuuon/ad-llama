@@ -7,7 +7,7 @@ import typescript from 'rollup-plugin-typescript2';
 export default {
   input: 'src/index.ts',
   output: {
-    file: 'lib/index.js',
+    file: 'dist/index.js',
     format: 'esm',
     name: 'ad-llama',
     exports: 'named',

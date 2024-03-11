@@ -3,9 +3,10 @@
   "type": "module",
   "version": "0.2.4",
   "description": "Structured inference with LLaMa 2 in your browser",
-  "main": "lib/index.js",
+  "main": "dist/index.js",
   "files": [
-    "lib/"
+    "lib/",
+    "dist/"
   ],
   "homepage": "https://github.com/gsuuon/ad-llama",
   "repository": {
@@ -22,7 +23,7 @@
   ],
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "rollup -c",
+    "build": "tsc && rollup -c",
     "dev": "rollup -w -c",
     "serve": "rollup -w -c dev.config.mjs",
     "docs": "typedoc src/index.ts --plugin typedoc-plugin-missing-exports"
@@ -30,7 +31,7 @@
   "author": "gsuuon@gmail.com",
   "license": "MIT",
   "devDependencies": {
-    "@mlc-ai/web-tokenizers": "^0.1.0",
+    "@mlc-ai/web-tokenizers": "file:./3rdparty/tokenizers-cpp/web/",
     "@rollup/plugin-commonjs": "^25.0.3",
     "@rollup/plugin-node-resolve": "^15.1.0",
     "@types/node": "^20.4.5",
