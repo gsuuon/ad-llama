@@ -9,7 +9,7 @@ if (import.meta.hot) { import.meta.hot.accept() }
 const infer = document.getElementById('infer')!
 
 const model = await loadModel(
-  'Llama-2-7b-chat-hf-q4f32_1',
+  'Llama-2-7b-chat-hf-q4f16_1',
   report => infer.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
   new URLSearchParams(window.location.search).get('cpu') === null
     ? TargetDevice.GPU

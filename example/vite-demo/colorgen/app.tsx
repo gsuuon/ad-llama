@@ -122,7 +122,7 @@ const Load = () => {
       when={model()}
       fallback={
         <Loading
-          llamaModel='Llama-2-7b-chat-hf-q4f32_1'
+          llamaModel='Llama-2-7b-chat-hf-q4f16_1'
           onLoad={setModel}
         />
       }>{

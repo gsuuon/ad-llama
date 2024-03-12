@@ -33,7 +33,7 @@ const hnApiGetRandomWhosHiring = async (tries = 2): Promise<string> => {
 
 const result = await renderTemplate(app, async () => {
   const model = await loadModel(
-    'Llama-2-7b-chat-hf-q4f32_1',
+    'Llama-2-7b-chat-hf-q4f16_1',
     report => app.innerHTML = `<pre id='progress'><code>${JSON.stringify(report, null, 2)}</code></pre>`,
     new URLSearchParams(window.location.search).get('cpu') === null
       ? TargetDevice.GPU
