@@ -452,7 +452,7 @@ export default async (
         ? buildSampler(priorCompletion, stops, options_.temperature, options_.top_p)
         : (logits: CpuNDArray) => sampleTokenFromLogits(logits, options_.temperature, options_.top_p)
 
-    const prefillText = `<<sys>>${system ?? 'You are a helpful assistant'}<</sys>>\n\n[INST]${preprompt ? ` ${preprompt}` : ''} ${prompt} [/INST] ${priorCompletion}`
+    const prefillText = `<s>[INST] <<SYS>>\n${system ?? "You are a helpful assistant"}\n<</SYS>>\n\n${preprompt ? (preprompt + " ") : ""}${prompt} [/INST] ${priorCompletion}`;
     console.info('[generate:start]', prompt, { ...options_, prefillText })
 
     if (filledKvCacheLength > 0) {
