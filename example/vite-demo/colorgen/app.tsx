@@ -44,17 +44,15 @@ const view: View = {
   hex: ({ context, update, primary, a }) => {
     const assistant = context('You are a helpful coloring assistant.')
 
-    const [hexColor] = createSignal(
-      assistant`#${a(`shade of ${primary} as a hex rgb value`, {
+    const hexColor = assistant`#${a(`shade of ${primary} as a hex rgb value`, {
         stops: ['\n', ' '],
         maxTokens: 6,
         validate: {
           retries: 10,
-          check: x => x.length === 6
+          check: (x) => x.match(/[0-9a-fA-F]{6}/) !== null,
         },
         id: 'hex'
       })} `
-    )
 
     return (
       <ShowInfer
@@ -72,13 +70,11 @@ const view: View = {
   primary: ({ model, context, prompt, update }) => {
     const assistant = context('You are a helpful coloring assistant.')
 
-    const [pickPrimaryColor] = createSignal(
-      assistant`Color: ${prompt('pick a primary color between red, green or blue', {
+    const pickPrimaryColor = assistant`Color: ${prompt('pick a primary color between red, green or blue', {
         sampler: model.bias.accept(sample.oneOf(['red\n', 'green\n', 'blue\n'])),
         stops: ['\n'],
         id: 'color'
       })}`
-    )
 
     return (
       <ShowInfer

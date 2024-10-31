@@ -1,10 +1,10 @@
 import '../../style.css'
 import { Template, StreamPartial } from 'ad-llama'
-import { Accessor, For, Show, createEffect, createSignal } from 'solid-js'
+import { For, Show, createSignal } from 'solid-js'
 
 export default function ShowInfer({ template, onComplete, showTemplate }: {
   showTemplate?: boolean
-  template: Accessor<Template>
+  template: Template
   onComplete: (refs: any) => any
 }) {
   const [canCancel, setCanCancel] = createSignal(true)
@@ -12,34 +12,28 @@ export default function ShowInfer({ template, onComplete, showTemplate }: {
   const [templateText, setTemplateText] = createSignal('')
   const [partials, setPartials] = createSignal<StreamPartial[]>([])
 
-  createEffect(() => {
-    setPartials([])
+  template.collect_refs(partial => {
+    switch (partial.type) {
+      case 'ungen':
+        setPartials([...partials().slice(0, -partial.tokenCount)])
+        break
+      case 'lit':
+      case 'gen':
+        setPartials([...partials(), partial])
 
-    template().collect_refs(partial => {
-      switch (partial.type) {
-        case 'ungen':
-          setPartials([...partials().slice(0, -partial.tokenCount)])
-          break
-        case 'lit':
-        case 'gen':
-          setPartials([...partials(), partial])
+        if (partial.type === 'gen') {
+          setPrompt(partial.prompt)
+        }
 
-          if (partial.type === 'gen') {
-            setPrompt(partial.prompt)
-          }
-
-          break
-        case 'template':
-          setTemplateText(partial.content)
-          break
-      }
-    }).then(results => {
-        setCanCancel(false)
-        onComplete(results)
-      })
-
-    console.log('showinfer', template())
-  })
+        break
+      case 'template':
+        setTemplateText(partial.content)
+        break
+    }
+  }).then(results => {
+      setCanCancel(false)
+      onComplete(results)
+    })
 
   return (
     <div>
@@ -56,7 +50,7 @@ export default function ShowInfer({ template, onComplete, showTemplate }: {
       </code></pre>
       <Show when={canCancel()} >
         <div id='controls'>
-          <button onClick={() => template().model.cancel()}>cancel</button>
+          <button onClick={() => template.model.cancel()}>cancel</button>
         </div>
       </Show>
     </div>
