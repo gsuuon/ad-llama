@@ -350,7 +350,7 @@ export const ad = (model: LoadedModel): CreateTemplate => {
             const generated = await model.generate({
               prompt,
               preprompt,
-              system,
+              system: system ? `<<SYS>>\n${system}\n<</SYS>>\n` : '',
               priorCompletion: completion,
               stops: [stop, ...(options?.stops ?? [])],
             },
